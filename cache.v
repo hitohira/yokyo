@@ -97,15 +97,30 @@ module cache(
 	reg table_we;
 
 	distram u2(clk,table_addr,table_din,table_dout,table_we);
+	
+	wire table_valid;
+	wire [11:0] table_tag;
 
+	assign table_valid = table_dout[12];
+	assign table_tag = table_dout[11:0];
 
 	reg [5:0] state;
+	reg [3:0] counter;
+	reg [511:0] line_data;
 
 	reg [31:0] req_addr;
 	reg [31:0] req_data;
 	reg [3:0] req_strb;
 	reg is_write;
 	
+	wire [11:0] g_tag;
+	wire [13:0] b_tag;
+	wire [5:0] offset;
+
+	assign g_tag = req_addr[31:20];
+	assign b_tag = req_addr[19:6];
+	assign offset = {req_addr[5:2],2'b00};
+
 	always @(posedge clk) begin
 		if (state == 0) begin // wait for mmu request 1
 			m_axi_arready <= 1;
@@ -115,7 +130,8 @@ module cache(
 			if(m_axi_arvalid) begin
 				req_addr <= m_axi_araddr;
 				is_write <= 0;
-				state <= // start read session
+				table_addr <= m_axi_araddr[19:6];
+				state <= 4; // tag check
 			end else begin
 				m_axi_awready <= 1;
 				stete <= 2;
@@ -126,6 +142,7 @@ module cache(
 				m_axi_wready <= 1;
 				req_addr <= m_axi_awaddr;
 				is_write <= 1;
+				table_addr <= m_axi_awaddr[19:6];
 				state <= 3;
 			end else begin
 				m_axi_arready <= 1;
@@ -136,10 +153,56 @@ module cache(
 				m_axi_wready <= 0;
 				req_data <= m_axi_wdata;
 				req_strb <= m_axi_wstrb;
-				state <= // start write session
+				state <= 4; // tag check
 			end
-		end else if
-
+		end else if (state == 4) begin // tag is exist?
+			if(table_tag == g_tag && table_valid) begin // cache block exist
+				if(is_write) begin
+					/////////////////////////////////////////////////////////
+				end else begin
+					////////////////////////////////////////////////////////
+				end
+			end else begin // cache miss -> sdram access
+				s_axi_araddr <= {g_tag,b_tag,6'b00};
+				s_axi_arvalid <= 1;
+				state <= 5;
+			end
+		end else if (state == 5) begin // read sdram 
+			if(s_axi_arready) begin
+				s_axi_arvalid <= 0;
+				s_axi_rready <= 1;
+				state <= 6;
+			end
+		end else if(state == 6) begin // read sdram2
+			if(s_axi_rvalid) begin
+				s_axi_rready <= 0;
+				line_data <= s_axi_rdata;
+				counter <= 0;
+				if(s_axi_rresp[1]) begin
+					err <= 1;
+				end else begin
+					state <= 7;
+				end
+			end
+		end else if (state == 7) begin // write cache line(16clk)
+			bram_addr <= {b_tag,counter,2'b00};
+			bram_din <= line_data[31:0];
+			bram_we <= 1;
+			line_data <= line_data >> 32;
+			counter <= counter + 1'b1;
+			if(counter == 4'b1111) begin
+				table_din <= {1'b1,g_tag}; // update table
+				table_we <= 1;
+				state <= 9;
+			end
+		end else if (state == 9) begin // start mem ope
+			bram_we <= 0;
+			table_we <= 0;
+			if(is_write) begin
+				/////////////////////////////////////////////////
+			end else begin
+				////////////////////////////////////////////////
+			end
 		end
 	end // always
 
