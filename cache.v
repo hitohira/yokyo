@@ -90,19 +90,21 @@ module cache(
 
 	// cache controller
 		// table size
-			// { valid 1bit,tag 12bit } * num_of_block 2**14
+			// {dirty 1bit, valid 1bit,tag 12bit } * num_of_block 2**14
 
 
 	reg [13:0] table_addr;
-	reg [12:0] table_din;
-	wire [12:0] table_dout;
+	reg [13:0] table_din;
+	wire [13:0] table_dout;
 	reg table_we;
 
 	distram u1(clk,table_addr,table_din,table_dout,table_we);
 	
+	wire table_dirty;
 	wire table_valid;
 	wire [11:0] table_tag;
-
+	
+	assign table_dirty = table_dout[13];
 	assign table_valid = table_dout[12];
 	assign table_tag = table_dout[11:0];
 
@@ -161,6 +163,8 @@ module cache(
 			if(table_tag == g_tag && table_valid) begin // cache block exist
 				bram_addr <= {b_tag,offset};
 				if(is_write) begin
+					table_din <= {2'b11,g_tag};
+					table_we <= 1;
 					bram_we <= req_strb;
 					bram_din <= req_data;
 					m_axi_bresp <= 0;
@@ -170,7 +174,7 @@ module cache(
 					bram_we <= 0;
 					state <= 26;
 				end
-			end else if (!table_valid) begin // cache miss -> read
+			end else if (!table_valid || !table_dirty) begin // cache miss -> read
 				s_axi_araddr <= {g_tag,b_tag,6'b00};
 				s_axi_arvalid <= 1;
 				state <= 17;
@@ -258,25 +262,28 @@ module cache(
 			line_data <= line_data >> 32;
 			counter <= counter + 1'b1;
 			if(counter == 4'b1111) begin
-				table_din <= {1'b1,g_tag}; // update table
+				table_din <= {2'b01,g_tag}; // update table
 				table_we <= 1;
 				state <= 20;
 			end
 		end else if (state == 20) begin // start mem ope
-			table_we <= 0;
 			bram_addr <= {b_tag,offset};
 			if(is_write) begin
+				table_din <= {2'b11,g_tag};
+				table_we <= 1;
 				bram_we <= req_strb;
 				bram_din <= req_data;
 				m_axi_bresp <= 0;
 				m_axi_bvalid <= 1;
 				state <= 24;
 			end else begin
+				table_we <= 0;
 				bram_we <= 0;
 				state <= 26;
 			end
 		end else if (state == 24) begin // write
 			bram_we <= 0;
+			table_we <= 0;
 			if(m_axi_bready) begin
 				m_axi_bvalid <= 0;
 				state <= 0;
