@@ -211,7 +211,7 @@ module cache(
 			line_data[479:0] <= line_data >> 32;
 			state <= 11;	
 		end else if (state == 11) begin
-			s_axi_awaddr <= {g_tag,b_tag,6'b0};
+			s_axi_awaddr <= {table_tag,b_tag,6'b0};
 			s_axi_awvalid <= 1;
 			s_axi_wdata <= line_data;
 			s_axi_wvalid <= 1;
