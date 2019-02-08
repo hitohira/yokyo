@@ -25,6 +25,15 @@ module mmu(
 	output reg [3:0] m_axi_wstrb,
 	output reg m_axi_wvalid,
 
+	// IO
+	input wire [7:0] io_in_data,
+	output reg io_in_rdy,
+	input wire io_in_vld,
+	output reg [7:0] io_out_data,
+	input wire io_out_rdy,
+	output reg io_out_vld,
+	input wire [4:0] io_err, // {resp[1],parity,frame,overrun,lost }
+
 	// from core
 	input wire [31:0] c_axi_araddr,
 	output reg c_axi_arready,
@@ -106,6 +115,10 @@ module mmu(
 			m_axi_wstrb <= 0;
 			m_axi_wvalid <= 0;
 
+			io_in_rdy <= 0;
+			io_out_data <= 0;
+			io_out_vld <= 0;
+
 			c_axi_arready <= 0;
 			c_axi_awready <= 0;
 			c_axi_bresp <= 0;
@@ -151,6 +164,8 @@ module mmu(
 			end
 			// addr translation
 		end else if (state == 4) begin //1,2
+			throw_exception <= 0;
+			exception_vec <= 0;
 			if (satp_mode == 1) begin
 				level <= 1;
 				m_axi_araddr <= {satp_ppn,12'b0} + {vpn_1,2'b0};
@@ -289,10 +304,20 @@ module mmu(
 				c_axi_wready <= 0;
 				data <= c_axi_wdata;
 				strb <= c_axi_wstrb;
-				state <= 15;
+				if(p_addr == 34'h80000004) begin // uart
+					state <= 24;
+				end else if (p_addr[33:31] == 3'b0) begin
+					state <= 15;
+				end else begin
+					throw_exception <= 1;
+					exception_vec <= EXCEPTION_UNDEFINED;
+					c_axi_bresp <= 0;
+					c_axi_bvalid <= 1;
+					state <= 18; // write end
+				end
 			end
 		end else if (state == 15) begin // write acccess memory
-			m_axi_awaddr <= p_addr;
+			m_axi_awaddr <= p_addr[31:0];
 			m_axi_awvalid <= 1;
 			m_axi_wdata <= ch_endian(data);
 			m_axi_wstrb <= {strb[0],strb[1],strb[2],strb[3]};
@@ -328,9 +353,21 @@ module mmu(
 				state <= 0;
 			end
 		end else if (state == 19) begin // read access memory
-			m_axi_araddr <= p_addr;
-			m_axi_arvalid <= 1;
-			state <= 20;
+			if(p_addr == 34'h80000000) begin
+				io_in_rdy <= 1;
+				state <= 28;
+			end else if (p_addr[33:31] == 3'b0) begin
+				m_axi_araddr <= p_addr[31:0];
+				m_axi_arvalid <= 1;
+				state <= 20;
+			end else begin
+				throw_exception <= 1;
+				exception_vec <= EXCEPTION_UNDEFINED;
+				c_axi_rdata <= 0;
+				c_axi_rresp <= 0;
+				c_axi_rvalid <= 1;
+				state <= 13; // read end
+			end
 		end else if (state == 20) begin
 			if(m_axi_arready) begin
 				m_axi_arvalid <= 0;
@@ -349,6 +386,24 @@ module mmu(
 				c_axi_rvalid <= 1;
 				state <= 13;  // read end
 			end
+		end else if (state == 24) begin // uart write
+			io_out_data <= data[31:24];
+			io_out_vld <= 1;
+			state <= 25;
+		end else if (state == 25) begin
+			if(io_out_rdy) begin
+				io_out_vld <= 0;
+				c_axi_bresp <= 0;
+				c_axi_bvalid <= 1;
+				state <= 18;
+			end
+		end else if (state == 28) begin
+			if(io_in_vld) begin
+				io_in_rdy <= 0;
+				c_axi_rdata <= io_in_data;
+				c_axi_rresp <= 0;
+				c_axi_rvalid <= 1;
+				state <= 13; //read end
 		end
 	end // always
 
