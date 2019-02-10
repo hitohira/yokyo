@@ -21,7 +21,7 @@ module distram(
 	integer i;
 	initial begin
 		for(i=0;i<WORDS;i=i+1) begin
-			mem[i] = 0;
+			mem[i] = {2'b11,12'b0};
 		end
 	end
 endmodule

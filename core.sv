@@ -82,6 +82,7 @@ module decoder
      output reg [4:0] rs1,
      output reg [4:0] rs2,
      output reg [31:0] imm,
+		 output reg [11:0] csr,
 
      instif inst,
      
@@ -115,6 +116,7 @@ module decoder
         rd <= (r_type | i_type | u_type | j_type) ? inst_code[11:7] : 5'd0;
         rs1 <= (r_type | i_type | s_type | b_type) ? inst_code[19:15] : 5'd0;
         rs2 <= (r_type | s_type | b_type) ? inst_code[24:20] : 5'd0;
+				csr <= inst_code[31:20];
 
         imm <= i_type ? {{21{inst_code[31]}}, inst_code[30:20]} :
              s_type ? {{21{inst_code[31]}}, inst_code[30:25], inst_code[11:7]} :
@@ -355,21 +357,19 @@ module core (
 	reg [31:0] pc;
 	reg [1:0] cpu_mode;
 
-	// csr
-	reg [31:0] satp;
-
 
   instif inst();
   reg [4:0] rd;
   wire rd_enable;
   wire frd_enable;
-  reg [4:0] rs1;
-  reg [4:0] rs2;
-  reg [31:0] imm;
-  reg [31:0] src1;
-  reg [31:0] src2;
-  reg [31:0] fsrc1;
-  reg [31:0] fsrc2;
+  wire [4:0] rs1; //DEC
+  wire [4:0] rs2; //DEC
+  wire [31:0] imm; // DEC
+	wire [11:0] csr_addr; // DEC
+  wire [31:0] src1; // REG
+  wire [31:0] src2; // REG
+  wire [31:0] fsrc1; // REG
+  wire [31:0] fsrc2; // REG
 	wire [31:0] result;
   wire [31:0] alu_result_;
 	reg [31:0] alu_result;
@@ -378,13 +378,52 @@ module core (
    
   wire [31:0] alu_src1;
   wire [31:0] alu_src2;
-  decoder DECODER(.clk(clk), .rstn(rstn), .rd(rd), .rs1(rs1), .rs2(rs2), .imm(imm), .inst(inst), .inst_code(instr));
+  decoder DECODER(.clk(clk), .rstn(rstn), .rd(rd), .rs1(rs1), .rs2(rs2), .imm(imm), .csr(csr_addr), .inst(inst), .inst_code(instr));
   register REGISTER(.clk(clk), .rstn(rstn), .rd_idx(rd), .rd_enable(rd_enable), .rs1_idx(rs1), .rs2_idx(rs2), .data(result), .rs1(src1), .rs2(src2));
   fregister FREGISTER(.clk(clk), .rstn(rstn), .rd_idx(rd), .rd_enable(frd_enable), .rs1_idx(rs1), .rs2_idx(rs2), .data(result), .rs1(fsrc1), .rs2(fsrc2));
    
   alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result_), .inst(inst));
 	//fpu FPU(.clk(clk), .rstn(rstn), .src1(fsrc1), .src2(fsrc2), .result(fpu_result), .inst(inst));
 
+	// csr
+	reg [31:0] sie; // 0x104 sipに対応するenable bit、これが立っていると割込みがenable
+	reg [31:0] stvec; // 0x105 BASE[31:2]=trap時のジャンプのベースアドレス,MODE[1:0]=ジャンプアドレスの決め方(HWは書き換えない?)
+	reg [31:0] sscratch; // 0x140 コンテキストの保存場所を指すように使われる(HWは書き換えない?)
+	reg [31:0] sepc; // 0x141, trap時にtrapが起こった時のpcに書き換える
+	reg [31:0] scause; // 0x142, trap時にその原因コードに書き換える see Table 4.2
+	reg [31:0] stval; // 0x143 Trap時に例外の情報を書き込む
+	reg [31:0] sip; // 0x144 SSIP[1]=これが1だとソフトウェア割込み発生,STIP[5]=これが1だとタイマー割込み,SEIP[9]=これが1だと外部割込み(HWも書き換えると思う)
+	reg [31:0] satp; // 0x180 アドレス変換の情報(HWは書き換えない)
+	
+	always @(posedge clk) begin
+		if(~rstn) begin
+			sie <= 0;
+			stvec <= 0;
+			sscratch <= 0;
+			sepc <= 0;
+			scause <= 0;
+			stval <= 0;
+			sip <= 0;
+			satp <= 0;
+		end else if (state == s_inst_write) begin
+			if(inst.csrrw) begin
+				case(csr_addr) 
+					12'h104 :
+					12'h105 :
+					12'h140 :
+					12'h141 :
+					12'h142 :
+					12'h143 :
+					12'h144 :
+					12'h180 :
+				endcase
+			end else if (inst.csrrs) begin
+
+			end else if (inst.csrrc) begin
+
+			end
+		end
+	end
 
 	assign m_cpu_mode = cpu_mode;
 	
@@ -435,7 +474,6 @@ module core (
 			instr <= 0;
 			pc <= 0;
 			cpu_mode <= 0;
-			satp <= 0;
 
 			//mmu reg
 			m_axi_araddr <= 0;
@@ -479,7 +517,11 @@ module core (
 			state <= s_inst_exec;
 		end else if (state == s_inst_exec) begin 
 				sub_state <= 0;
-				state <= s_inst_mem;
+				if(inval) begin
+					state <= s_inst_inval;
+				end else begin
+					state <= s_inst_mem;
+				end
 		end else if (state == s_inst_mem) begin
 			if(is_load) begin // lb,lh,lw, lbu,lhu,flw
 				if(sub_state == 0) begin
