@@ -442,15 +442,70 @@ module core (
 				state <= s_inst_write;
 			end
 		end else if (state == s_inst_mem) begin
-			if(is_load) begin // lb,lh,lw, lbu,lhu,fsw
+			if(is_load) begin // lb,lh,lw, lbu,lhu,flw
 				if(sub_state == 0) begin
-					
+					m_axi_araddr <= {addr[31:2],2'b00};
+					m_axi_arvalid <= 1;
+					sub_state <= 1;
 				end else if (sub_state == 1) begin
-
+					if(m_axi_arready) begin
+						m_axi_arvalid <= 0;
+						m_axi_rready <= 1;
+						sub_state <= 2;
+					end
+				end else if (sub_state == 2) begin // page fault!!!!!!!!!!!
+					if(m_axi_rvalid) begin
+						m_axi_rready <= 0;
+						if(inst.lb) begin
+							case(addr[1:0])
+								2'b00: load_result <= {{24{m_axi_rdata[31]}},m_axi_rdata[31:24]};
+								2'b01: load_result <= {{24{m_axi_rdata[23]}},m_axi_rdata[23:16]};
+								2'b10: load_result <= {{24{m_axi_rdata[15]}},m_axi_rdata[15:8]};
+								2'b11: load_result <= {{24{m_axi_rdata[7]}},m_axi_rdata[7:0]}};
+								default: load_result <= 0;
+							endcase
+						end else if (inst.lh) begin
+							case(addr[1:0])
+								2'b00 : load_result <= {{16{m_axi_rdata[31]}},m_axi_rdata[31:16]};
+								2'b10 : load_result <= {{16{m_axi_rdata[15]}},m_axi_rdata[15:0]};
+								default : load_result <= 0; // fault !?
+							endcase
+						end else if (inst.lw) begin
+							load_result <= m_axi_rdata;
+						end else if (inst.lbu) begin
+							case(addr[1:0])
+								2'b00: load_result <= {24'b0,m_axi_rdata[31:24]};
+								2'b01: load_result <= {24'b0,m_axi_rdata[23:16]};
+								2'b10: load_result <= {24'b0,m_axi_rdata[15:8]};
+								2'b11: load_result <= {24'b0,m_axi_rdata[7:0]}};
+								default : load_result <= 0;
+							endcase
+						end else if (inst.lhu) begin
+							case(addr[1:0])
+								2'b00 : load_result <= {16'b0,m_axi_rdata[31:16]};
+								2'b10 : load_result <= {16'b0,m_axi_rdata[15:0]};
+								default : load_result <= 0; // fault !?
+							endcase
+						end else if (inst.flw) begin
+							load_result <= m_axi_rdata;
+						end
+						sub_state <= 0;
+						state <= s_inst_write;
+					end
 				end
-			end else begin // sb,sh,sw,flw
+			end else begin // sb,sh,sw,fsw
 				if (sub_state == 0) begin
+					m_axi_awaddr <= {addr[31:2],2'b00};
+					m_axi_awvalid <= 1;
+					m_axi_wvalid <= 1;
+					if(inst.sb) begin // strb,data
+						
+					end else if (inst.sh) begin
 
+					end else if (inst.sw) begin
+
+					end
+					sub_state <= 1;
 				end else if (sub_state == 1) begin
 
 				end
