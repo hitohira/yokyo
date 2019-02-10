@@ -49,13 +49,28 @@ interface instif;
   
   reg fsgnj;
   reg fsgnjn;
+
+  reg mul;
+	reg mulh;
+	reg mulhsu;
+	reg mulhu;
+	reg div;
+	reg divu;
+	reg rem;
+	reg remu;
+								  
+	reg csrrw;
+	reg csrrs;
+	reg csrrc;
   
   wire inval;
+
   assign inval = ~(lui | auipc | jal | jalr | beq | bne | blt | bge | bltu | bgeu | lb |
-            lh | lw | lbu | lhu | sb | sh | sw | addi | slti | sltiu | xori | ori | 
-            andi | slli | srli | srai | add | sub | sll | slt | sltu | xor_ | srl |
-            sra | or_ | and_ | fadd | fsub | fmul | fdiv | fsw | flw | feq | flt | fle |
-            fsgnj | fsgnjn); 
+	            lh | lw | lbu | lhu | sb | sh | sw | addi | slti | sltiu | xori | ori | 
+	            andi | slli | srli | srai | add | sub | sll | slt | sltu | xor_ | srl |
+	            sra | or_ | and_ | fadd | fsub | fmul | fdiv | fsw | flw | feq | flt | fle |
+	            fsgnj | fsgnjn | mul | mulh | mulhsu | mulhu | div | divu | rem | remu |
+	            csrrw | csrrs | csrrc); 
 endinterface
 
 module decoder
@@ -163,6 +178,19 @@ module decoder
         
         inst.fsw <= opcode == 7'b0100111;
         inst.flw <= opcode == 7'b0000111;
+
+				inst.mul    <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b000);
+				inst.mulh   <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b001);
+				inst.mulhsu <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b010);
+				inst.mulhu  <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b011);
+				inst.div    <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b100);
+				inst.divu   <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b101);
+				inst.rem    <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b110);
+				inst.remu   <= (opcode == 7'b0110011) && (funct7 == 7'b1) && (funct3 == 3'b111);
+																			        
+				inst.csrrw <= (opcode == 7'b1110011) && (funct3 == 3'b001);
+				inst.csrrs <= (opcode == 7'b1110011) && (funct3 == 3'b010);
+				inst.csrrc <= (opcode == 7'b1110011) && (funct3 == 3'b011);
     end
 endmodule
 
@@ -343,9 +371,10 @@ module core (
   reg [31:0] fsrc1;
   reg [31:0] fsrc2;
 	wire [31:0] result;
-  reg [31:0] alu_result;
+  wire [31:0] alu_result_;
+	reg [31:0] alu_result;
   reg [31:0] load_result;
-  reg [31:0] fpu_result;
+  wire [31:0] fpu_result;
    
   wire [31:0] alu_src1;
   wire [31:0] alu_src2;
@@ -353,7 +382,7 @@ module core (
   register REGISTER(.clk(clk), .rstn(rstn), .rd_idx(rd), .rd_enable(rd_enable), .rs1_idx(rs1), .rs2_idx(rs2), .data(result), .rs1(src1), .rs2(src2));
   fregister FREGISTER(.clk(clk), .rstn(rstn), .rd_idx(rd), .rd_enable(frd_enable), .rs1_idx(rs1), .rs2_idx(rs2), .data(result), .rs1(fsrc1), .rs2(fsrc2));
    
-  alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result), .inst(inst));
+  alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result_), .inst(inst));
 	//fpu FPU(.clk(clk), .rstn(rstn), .src1(fsrc1), .src2(fsrc2), .result(fpu_result), .inst(inst));
 
 
@@ -390,9 +419,15 @@ module core (
                      imm;
                       
   wire is_load;
+	wire is_store;
   wire [31:0] addr;
   assign is_load = inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.flw;
+	assign is_store = inst.sb | inst.sh | inst.sw | inst.fsw;
   assign addr = src1 + imm;   
+
+	always @(posedge clk) begin
+		alu_result <= alu_result_;
+	end
 	
 	always @(posedge clk) begin
 		if (~rstn) begin 
@@ -443,12 +478,8 @@ module core (
 		end else if (state == s_inst_decode) begin
 			state <= s_inst_exec;
 		end else if (state == s_inst_exec) begin 
-			if(inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.sb | inst.sh | inst.sw | inst.flw | inst.fsw) begin
 				sub_state <= 0;
 				state <= s_inst_mem;
-			end else begin
-				state <= s_inst_write;
-			end
 		end else if (state == s_inst_mem) begin
 			if(is_load) begin // lb,lh,lw, lbu,lhu,flw
 				if(sub_state == 0) begin
@@ -501,7 +532,7 @@ module core (
 						state <= s_inst_write;
 					end
 				end
-			end else begin // sb,sh,sw,fsw
+			end else if (is_store) begin // sb,sh,sw,fsw
 				if (sub_state == 0) begin
 					m_axi_awaddr <= {addr[31:2],2'b00};
 					m_axi_awvalid <= 1;
@@ -564,6 +595,8 @@ module core (
 						state <= s_inst_write;
 					end
 				end
+			end else begin // not mem ope
+				state <= s_inst_write;
 			end
 		end else if (state == s_inst_write) begin
 			if(inst.jalr) begin
