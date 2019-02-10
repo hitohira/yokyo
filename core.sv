@@ -356,6 +356,11 @@ module core (
   alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result), .inst(inst));
 	//fpu FPU(.clk(clk), .rstn(rstn), .src1(fsrc1), .src2(fsrc2), .result(fpu_result), .inst(inst));
 
+
+	assign m_cpu_mode = cpu_mode;
+	
+	assign m_satp = satp;
+
 	assign rd_enable = state == s_inst_write && 
 			(inst.lui | inst.auipc |
 			 inst.addi | inst.slti | inst.xori | inst.ori | inst.andi | inst.slli |
@@ -367,7 +372,7 @@ module core (
 			(inst.fadd | inst.fsub | inst.fmul | inst.fdiv | inst.fsgnj | inst.fsgnjn | inst.flw);
 	assign result = 
 			inst.lui ? imm :
-			inst.auipc ? pc + imm;
+			inst.auipc ? pc + imm :
 			(inst.addi | inst.slti | inst.xori | inst.ori | inst.andi | inst.slli | 
 			 inst.srli | inst.srai | inst.add | inst.sub | inst.sll | inst.slt | inst.sltu |
 			 inst.xor_ | inst.srl | inst.sra  | inst.or_  | inst.and_) ? alu_result :
@@ -385,6 +390,7 @@ module core (
                      imm;
                       
   wire is_load;
+  wire [31:0] addr;
   assign is_load = inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.flw;
   assign addr = src1 + imm;   
 	
@@ -413,6 +419,7 @@ module core (
 			if(sub_state == 0) begin
 				m_axi_araddr <= pc;
 				m_axi_arvalid <= 1;
+				m_is_instr <= 1;
 				sub_state <= 1;
 			end else if (sub_state == 1) begin
 				if(m_axi_arready) begin
@@ -425,6 +432,7 @@ module core (
 					m_axi_rready <= 0;
 					instr <= m_axi_rdata;
 					sub_state <= 0;
+					m_is_instr <= 0;
 					if(m_throw_exception) begin
 						state <= s_inst_inval; //////////////////////////// instr page fault?
 					end else begin
@@ -461,7 +469,7 @@ module core (
 								2'b00: load_result <= {{24{m_axi_rdata[31]}},m_axi_rdata[31:24]};
 								2'b01: load_result <= {{24{m_axi_rdata[23]}},m_axi_rdata[23:16]};
 								2'b10: load_result <= {{24{m_axi_rdata[15]}},m_axi_rdata[15:8]};
-								2'b11: load_result <= {{24{m_axi_rdata[7]}},m_axi_rdata[7:0]}};
+								2'b11: load_result <= {{24{m_axi_rdata[7]}},m_axi_rdata[7:0]};
 								default: load_result <= 0;
 							endcase
 						end else if (inst.lh) begin
@@ -477,7 +485,7 @@ module core (
 								2'b00: load_result <= {24'b0,m_axi_rdata[31:24]};
 								2'b01: load_result <= {24'b0,m_axi_rdata[23:16]};
 								2'b10: load_result <= {24'b0,m_axi_rdata[15:8]};
-								2'b11: load_result <= {24'b0,m_axi_rdata[7:0]}};
+								2'b11: load_result <= {24'b0,m_axi_rdata[7:0]};
 								default : load_result <= 0;
 							endcase
 						end else if (inst.lhu) begin
@@ -498,16 +506,63 @@ module core (
 					m_axi_awaddr <= {addr[31:2],2'b00};
 					m_axi_awvalid <= 1;
 					m_axi_wvalid <= 1;
-					if(inst.sb) begin // strb,data
-						
+					if(inst.sb) begin // strb
+						case(addr[1:0])
+							2'b00 : begin 
+								m_axi_wstrb <= 4'b1000;
+								m_axi_wdata <= {src2[7:0],24'b0};
+								end
+							2'b01 : begin
+								m_axi_wstrb <= 4'b0100;
+								m_axi_wdata <= {8'b0,src2[7:0],16'b0};
+								end
+							2'b10 : begin
+								m_axi_wstrb <= 4'b0010;
+								m_axi_wdata <= {16'b0,src2[7:0],8'b0};
+								end
+							2'b11 : begin
+								m_axi_wstrb <= 4'b0001;
+								m_axi_wdata <= {24'b0,src2[7:0]};
+								end
+							default : m_axi_wstrb <= 0;
+						endcase	
 					end else if (inst.sh) begin
-
+						case(addr[1:0])
+							2'b00 : begin
+								m_axi_wstrb <= 4'b1100;
+								m_axi_wdata <= {src2[15:0],16'b0};
+								end
+							2'b10 : begin
+								m_axi_wstrb <= 4'b0011;
+								m_axi_wdata <= {16'b0,src2[15:0]};
+								end
+							default : m_axi_wstrb <= 0;
+						endcase
 					end else if (inst.sw) begin
-
+						m_axi_wstrb <= 4'b1111;
+						m_axi_wdata <= src2;
+					end else if (inst.fsw) begin
+						m_axi_wstrb <= 4'b1111;
+						m_axi_wdata <= src2;
 					end
 					sub_state <= 1;
 				end else if (sub_state == 1) begin
-
+					if(m_axi_awready) begin
+						m_axi_awvalid <= 0;
+					end
+					if(m_axi_wready) begin
+						m_axi_wvalid <= 0;
+					end
+					if(!m_axi_awvalid && !m_axi_wvalid) begin
+						m_axi_bready <= 1;
+						sub_state <= 2;
+					end
+				end else if (sub_state == 2) begin // page fault!!!!!!
+					if(m_axi_bvalid) begin
+						m_axi_bready <= 0;
+						sub_state <= 0;
+						state <= s_inst_write;
+					end
 				end
 			end
 		end else if (state == s_inst_write) begin
@@ -521,6 +576,8 @@ module core (
 				end else begin
 					pc <= pc + imm;
 				end
+			end else begin
+				pc <= pc + 32'd4;
 			end
 			state <= s_inst_fetch;
 		end else if (state == s_inst_inval) begin

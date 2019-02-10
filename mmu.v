@@ -404,6 +404,7 @@ module mmu(
 				c_axi_rresp <= 0;
 				c_axi_rvalid <= 1;
 				state <= 13; //read end
+			end
 		end
 	end // always
 
