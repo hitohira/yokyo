@@ -400,7 +400,7 @@ module mmu(
 		end else if (state == 28) begin
 			if(io_in_vld) begin
 				io_in_rdy <= 0;
-				c_axi_rdata <= io_in_data;
+				c_axi_rdata <= {io_in_data[7:0],24'b0};
 				c_axi_rresp <= 0;
 				c_axi_rvalid <= 1;
 				state <= 13; //read end
