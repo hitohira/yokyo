@@ -360,7 +360,12 @@ module core (
 	input wire ex_in_valid
 
   );
-	
+
+  localparam EXCEPTION_INSTR_PG_FAULT = 3'b001;
+  localparam EXCEPTION_LOAD_PG_FAULT = 3'b010;
+  localparam EXCEPTION_STORE_PG_FAULT = 3'b011;
+  localparam EXCEPTION_UNDEFINED = 3'b111;
+			
 	s_inst state = s_wait;
 	reg [5:0] sub_state;
 
@@ -368,6 +373,8 @@ module core (
 	reg [31:0] pc;
 	reg [1:0] cpu_mode;
 
+	reg [2:0] mem_exception_vec;
+	reg [2:0] exu_exception_vec;
 
   instif inst();
   wire [4:0] rd; // DEC
@@ -480,8 +487,10 @@ module core (
 			end else if (cpu_mode == 3 && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
 				csr_unprivileged <= 1;
 			end
+		end else if (state == s_inst_inval) begin // exception
+
 		end
-	end
+	end // always
 
 	always @(posedge clk) begin
 		if(~rstn) begin
@@ -570,11 +579,14 @@ module core (
 			m_axi_wvalid <= 0;
 
 			exu_result <= 0;
+			exu_exception_vec <= 0;
+			mem_exception_vec <= 0;
 		end else if (state == s_wait) begin
 			sub_state <= 0;
 			state <= s_inst_fetch;
 		end else if (state == s_inst_fetch) begin 
 			if(sub_state == 0) begin
+				mem_exception_vec <= 0;
 				m_axi_araddr <= pc;
 				m_axi_arvalid <= 1;
 				m_is_instr <= 1;
@@ -592,7 +604,8 @@ module core (
 					sub_state <= 0;
 					m_is_instr <= 0;
 					if(m_throw_exception) begin
-						state <= s_inst_inval; //////////////////////////// instr page fault?
+						mem_exception_vec <= m_exception_vec;
+						state <= s_inst_inval; // instr page fault
 					end else begin
 						state <= s_inst_decode;
 					end
@@ -602,6 +615,7 @@ module core (
 			state <= s_inst_exec;
 		end else if (state == s_inst_exec) begin 
 				sub_state <= 0;
+				exu_exception_vec <= 0;
 				if(inval) begin
 					state <= s_inst_inval;
 				end else begin
@@ -622,25 +636,27 @@ module core (
 				end else if (sub_state == 2) begin // page fault!!!!!!!!!!!
 					if(m_axi_rvalid) begin
 						m_axi_rready <= 0;
-						if(inst.lb) begin
+						if(m_throw_exception) begin
+							mem_exception_vec <= m_exception_vec;
+						end else if(inst.lb) begin
 							case(addr[1:0])
 								2'b00: load_result <= {{24{m_axi_rdata[31]}},m_axi_rdata[31:24]};
 								2'b01: load_result <= {{24{m_axi_rdata[23]}},m_axi_rdata[23:16]};
 								2'b10: load_result <= {{24{m_axi_rdata[15]}},m_axi_rdata[15:8]};
 								2'b11: load_result <= {{24{m_axi_rdata[7]}},m_axi_rdata[7:0]};
-								default: load_result <= 0;
+								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
 							endcase
 						end else if (inst.lh) begin
 							case(addr[1:0])
 								2'b00 : load_result <= {{16{m_axi_rdata[31]}},m_axi_rdata[31:16]};
 								2'b10 : load_result <= {{16{m_axi_rdata[15]}},m_axi_rdata[15:0]};
-								default : load_result <= 0; // fault !?
+								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
 							endcase
-						end else if (inst.lw) begin
+						end else if (inst.lw | inst.flw) begin
 							if(addr[1:0] == 2'b0) begin
 								load_result <= m_axi_rdata;
 							end else begin
-								// misalign
+								 mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
 							end
 						end else if (inst.lbu) begin
 							case(addr[1:0])
@@ -648,23 +664,23 @@ module core (
 								2'b01: load_result <= {24'b0,m_axi_rdata[23:16]};
 								2'b10: load_result <= {24'b0,m_axi_rdata[15:8]};
 								2'b11: load_result <= {24'b0,m_axi_rdata[7:0]};
-								default : load_result <= 0;
+								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
 							endcase
 						end else if (inst.lhu) begin
 							case(addr[1:0])
 								2'b00 : load_result <= {16'b0,m_axi_rdata[31:16]};
 								2'b10 : load_result <= {16'b0,m_axi_rdata[15:0]};
-								default : load_result <= 0; // fault !?
+								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
 							endcase
-						end else if (inst.flw) begin
-							if(addr[1:0] == 2'b0) begin
-								load_result <= m_axi_rdata;
-							end else begin
-								//misalign
-							end
 						end
+						sub_state <= 3;
+					end else if (sub_state == 3) begin
 						sub_state <= 0;
-						state <= s_inst_write;
+						if(mem_exception_vec == 0) begin
+							state <= s_inst_write;
+						end else begin
+							state <= s_inst_inval;
+						end
 					end
 				end
 			end else if (is_store) begin // sb,sh,sw,fsw
@@ -690,7 +706,10 @@ module core (
 								m_axi_wstrb <= 4'b0001;
 								m_axi_wdata <= {24'b0,src2[7:0]};
 								end
-							default : m_axi_wstrb <= 0;
+							default : begin
+								m_axi_wstrb <= 0;
+								mem_exception_vec <= EXCEPTION_STORE_PG_FAULT;
+								end
 						endcase	
 					end else if (inst.sh) begin
 						case(addr[1:0])
@@ -702,14 +721,18 @@ module core (
 								m_axi_wstrb <= 4'b0011;
 								m_axi_wdata <= {16'b0,src2[15:0]};
 								end
-							default : m_axi_wstrb <= 0; // misalign
+							default : begin
+								m_axi_wstrb <= 0;
+								mem_exception_vec <= EXCEPTION_STORE_PG_FAULT;
+								end
 						endcase
 					end else if (inst.sw | inst.fsw) begin
-						if(addr[1:0] == 0) begin\
+						if(addr[1:0] == 0) begin
 							m_axi_wstrb <= 4'b1111;
 							m_axi_wdata <= src2;
 						end else begin
-							m_axi_wstrb <= 0; // misalign
+							m_axi_wstrb <= 0; 
+							mem_exception_vec <= EXCEPTION_STORE_PG_FAULT;
 						end
 					end
 					sub_state <= 1;
@@ -728,7 +751,14 @@ module core (
 					if(m_axi_bvalid) begin
 						m_axi_bready <= 0;
 						sub_state <= 0;
-						state <= s_inst_write;
+						if(m_throw_exception) begin
+							state <= s_inst_inval;
+							mem_exception_vec <= m_exception_vec;
+						end else if (mem_exception_vec != 0) begin
+							state <= s_inst_inval;
+						end begin
+							state <= s_inst_write;
+						end
 					end
 				end
 			end else if (is_exu) begin // exu ope
@@ -736,6 +766,7 @@ module core (
 					exu_result <= ex_result;
 					if(ex_exception != 0) begin
 						state <= s_inst_inval;
+						exu_exception_vec <= ex_exception;
 					end else begin
 						state <= s_inst_write;
 					end
@@ -761,9 +792,12 @@ module core (
 			end else begin
 				pc <= pc + 32'd4;
 			end
+			sub_state <= 0;
 			state <= s_inst_fetch;
 		end else if (state == s_inst_inval) begin
-
+			///////////////////////////////////////////////////
+			sub_state <= 0;
+			state <= s_inst_fetch;
 		end
  	end // always
        

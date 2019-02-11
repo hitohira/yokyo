@@ -17,39 +17,39 @@ module exu(
 	// 上に戻る
 
 	wire imul;
-	assign ex_sig[0];
+	assign imul = ex_sig[0];
 	wire imulh;
-	assign ex_sig[1];
+	assign imulh = ex_sig[1];
 	wire imulhsu;
-	assign ex_sig[2];
+	assign imulhsu = ex_sig[2];
 	wire imulhu;
-	assign ex_sig[3];
+	assign imulhu = ex_sig[3];
 	wire idiv;
-	assign ex_sig[4];
+	assign idiv = ex_sig[4];
 	wire idivu;
-	assign ex_sig[5];
+	assign idivu = ex_sig[5];
 	wire irem;
-	assign ex_sig[6];
+	assign irem = ex_sig[6];
 	wire iremu;
-	assign ex_sig[7];
+	assign iremu = ex_sig[7];
 	wire ifadd;
-	assign ex_sig[8];
+	assign ifadd = ex_sig[8];
 	wire ifsub;
-	assign ex_sig[9];
+	assign ifsub = ex_sig[9];
 	wire ifmul;
-	assign ex_sig[10];
+	assign ifmul = ex_sig[10];
 	wire ifdiv;
-	assign ex_sig[11];
+	assign ifdiv = ex_sig[11];
 	wire ifeq;
-	assign ex_sig[12];
+	assign ifeq = ex_sig[12];
 	wire iflt;
-	assign ex_sig[13];
+	assign iflt = ex_sig[13];
 	wire ifle;
-	assign ex_sig[14];
+	assign ifle = ex_sig[14];
 	wire ifsgnj;
-	assign ex_sig[15];
+	assign ifsgnj = ex_sig[15];
 	wire ifsgjn;
-	assign ex_sig[16];
+	assign ifsgjn = ex_sig[16];
 	
 	reg [6:0] counter;
 	always @(posedge clk) begin

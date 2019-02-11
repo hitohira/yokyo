@@ -69,12 +69,20 @@ module mmu(
 
 	// little endian!!!!!!!!!!!
 	// c_axi bresp and rresp
-
+	
+	localparam EXCEPTION_INSTR_PG_FAULT = 3'b001;
+	localparam EXCEPTION_LOAD_PG_FAULT = 3'b010;
+	localparam EXCEPTION_STORE_PG_FAULT = 3'b011;
 	localparam EXCEPTION_UNDEFINED = 3'b111;
 	
 
 	function [31:0] ch_endian(input [31:0] e_data);
 		ch_endian = { e_data[7:0],e_data[15:8],e_data[23:16],e_data[31:24]};
+	endfunction
+
+	function [2:0] fault(input instr,input write);
+		fault = instr ? EXCEPTION_INSTR_PG_FAULT :
+		        write ? EXCEPTION_STORE_PG_FAULT : EXCEPTION_STORE_PG_FAULT;
 	endfunction
 
 	reg [5:0] state;
@@ -200,7 +208,7 @@ module mmu(
 		end else if (state == 7) begin
 			if(data_v == 0 || (data_r == 0 && data_w == 1)) begin // 3
 				throw_exception <= 1;
-				exception_vec <= EXCEPTION_UNDEFINED;
+				exception_vec <= fault(is_instr,is_write);
 				state <= 12; //ret
 			end	else if (data_r == 1 || data_x == 1) begin // 4 ...step 5. ,5
 				if (level == 1) begin
@@ -210,19 +218,19 @@ module mmu(
 				end
 				if(cpu_mode == 2'b11 && !data_u) begin // user?
 					throw_exception <= 1;
-					exception_vec <= EXCEPTION_UNDEFINED;
+					exception_vec <= fault(is_instr,is_write);
 					state <= 12; //ret
 				end else if(is_write && !data_w) begin //write ok?
 					throw_exception <= 1;
-					exception_vec <= EXCEPTION_UNDEFINED;
+					exception_vec <= fault(is_instr,is_write);
 					state <= 12; //ret
 				end else if(is_instr && !data_x) begin //exec ok?
 					throw_exception <= 1;
-					exception_vec <= EXCEPTION_UNDEFINED;
+					exception_vec <= fault(is_instr,is_write);
 					state <= 12; //ret
 				end else if(!data_r) begin // read ok?
 					throw_exception <= 1;
-					exception_vec <= EXCEPTION_UNDEFINED;
+					exception_vec <= fault(is_instr,is_write);
 					state <= 12; //ret
 				end else if(level == 1 && data_ppn_0 != 0) begin //6 superpage ok? 
 					throw_exception <= 1;
