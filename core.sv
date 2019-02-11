@@ -64,6 +64,9 @@ interface instif;
 	reg csrrw;
 	reg csrrs;
 	reg csrrc;
+
+	reg ecall;
+	reg sret;
   
   wire inval;
 
@@ -72,7 +75,7 @@ interface instif;
 	            andi | slli | srli | srai | add | sub | sll | slt | sltu | xor_ | srl |
 	            sra | or_ | and_ | fadd | fsub | fmul | fdiv | fsw | flw | feq | flt | fle |
 	            fsgnj | fsgnjn | mul | mulh | mulhsu | mulhu | div | divu | rem | remu |
-	            csrrw | csrrs | csrrc); 
+	            csrrw | csrrs | csrrc | ecall | sret); 
 endinterface
 
 module decoder
@@ -195,6 +198,9 @@ module decoder
 				inst.csrrw <= (opcode == 7'b1110011) && (funct3 == 3'b001);
 				inst.csrrs <= (opcode == 7'b1110011) && (funct3 == 3'b010);
 				inst.csrrc <= (opcode == 7'b1110011) && (funct3 == 3'b011);
+
+				inst.ecall <= inst_code == 32'b1110011;
+				inst.sret <= inst_code == 32'b00010000001000000000000001110011;
     end
 endmodule
 
@@ -373,6 +379,10 @@ module core (
 	reg [31:0] pc;
 	reg [1:0] cpu_mode;
 
+  wire is_load;
+	wire is_store;
+  wire [31:0] addr;
+
 	reg [2:0] mem_exception_vec;
 	reg [2:0] exu_exception_vec;
 
@@ -488,7 +498,25 @@ module core (
 				csr_unprivileged <= 1;
 			end
 		end else if (state == s_inst_inval) begin // exception
-
+			sepc <= pc;
+			if(inst.inval | csr_inval_addr | csr_unprivileged) begin // Illegal instruction
+				scause <= 2;
+				stval <= 0;
+			end else if (inst.ecall && cpu_mode == 2'b11) begin // Environment call from U-mode
+				scause <= 8;
+				stval <= 0;
+			end else if (inst.ecall && cpu_mode == 2'b01) begin // Environment call from S-mode
+				scause <= 9;
+				stval <= 0;
+			end else if (mem_exception_vec != 0) begin
+				case(mem_exception_vec) 
+					EXCEPTION_INSTR_PG_FAULT : scause <= 1;
+					EXCEPTION_LOAD_PG_FAULT  : scause <= 5;
+					EXCEPTION_STORE_PG_FAULT : scause <= 15;
+					default : scause <= 0; // ?????????????????????
+				endcase
+				stval <= addr;
+			end
 		end
 	end // always
 
@@ -549,9 +577,6 @@ module core (
                      inst.beq | inst.bne | inst.blt | inst.bge | inst.bltu | inst.bgeu) ? src2 :
                      imm;
                       
-  wire is_load;
-	wire is_store;
-  wire [31:0] addr;
   assign is_load = inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.flw;
 	assign is_store = inst.sb | inst.sh | inst.sw | inst.fsw;
   assign addr = src1 + imm;   
@@ -616,7 +641,7 @@ module core (
 		end else if (state == s_inst_exec) begin 
 				sub_state <= 0;
 				exu_exception_vec <= 0;
-				if(inval) begin
+				if(inst.inval | inst.ecall) begin
 					state <= s_inst_inval;
 				end else begin
 					state <= s_inst_mem;
@@ -795,7 +820,8 @@ module core (
 			sub_state <= 0;
 			state <= s_inst_fetch;
 		end else if (state == s_inst_inval) begin
-			///////////////////////////////////////////////////
+			cpu_mode <= 2'b01;
+			pc <= stvec[31:2];
 			sub_state <= 0;
 			state <= s_inst_fetch;
 		end
