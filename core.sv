@@ -359,7 +359,7 @@ module core (
 
 
   instif inst();
-  reg [4:0] rd;
+  wire [4:0] rd; // DEC
   wire rd_enable;
   wire frd_enable;
   wire [4:0] rs1; //DEC
@@ -371,10 +371,11 @@ module core (
   wire [31:0] fsrc1; // REG
   wire [31:0] fsrc2; // REG
 	wire [31:0] result;
-  wire [31:0] alu_result_;
+  wire [31:0] alu_result_; // ALU
 	reg [31:0] alu_result;
   reg [31:0] load_result;
-  wire [31:0] fpu_result;
+  wire [31:0] fpu_result; // FPU
+	reg [31:0] csr_result;
    
   wire [31:0] alu_src1;
   wire [31:0] alu_src2;
@@ -394,6 +395,9 @@ module core (
 	reg [31:0] stval; // 0x143 Trap時に例外の情報を書き込む
 	reg [31:0] sip; // 0x144 SSIP[1]=これが1だとソフトウェア割込み発生,STIP[5]=これが1だとタイマー割込み,SEIP[9]=これが1だと外部割込み(HWも書き換えると思う)
 	reg [31:0] satp; // 0x180 アドレス変換の情報(HWは書き換えない)
+
+	reg csr_inval_addr;
+	reg csr_unprivileged;
 	
 	always @(posedge clk) begin
 		if(~rstn) begin
@@ -405,25 +409,75 @@ module core (
 			stval <= 0;
 			sip <= 0;
 			satp <= 0;
-		end else if (state == s_inst_write) begin
-			if(inst.csrrw) begin
+			csr_inval_addr <= 0;
+			csr_unprivileged <= 0;
+		end else if (state == s_inst_decode) begin
+			csr_inval_addr <= 0;
+			csr_unprivileged <= 0;
+		end else if (state == s_inst_exec) begin
+			if(inst.csrrw && cpu_mode != 3) begin
 				case(csr_addr) 
-					12'h104 :
-					12'h105 :
-					12'h140 :
-					12'h141 :
-					12'h142 :
-					12'h143 :
-					12'h144 :
-					12'h180 :
+					12'h104 : sie <= src1;
+					12'h105 : stvec <= src1;
+					12'h140 : sscratch <= src1;
+					12'h141 : sepc <= src1;
+					12'h142 : scause <= src1;
+					12'h143 : stval <= src1;
+					12'h144 : sip <= src1;
+					12'h180 : satp <= src1;
+					default : csr_inval_addr <= 1;
 				endcase
-			end else if (inst.csrrs) begin
-
-			end else if (inst.csrrc) begin
-
+			end else if (inst.csrrs && cpu_mode != 3) begin
+				case(csr_addr) 
+					12'h104 : sie <= sie | src1;
+					12'h105 : stvec <= stvec | src1;
+					12'h140 : sscratch <= sscratch | src1;
+					12'h141 : sepc <= sepc | src1;
+					12'h142 : scause <= scause | src1;
+					12'h143 : stval <= stval | src1;
+					12'h144 : sip <= sip | src1;
+					12'h180 : satp <= satp | src1;
+					default : csr_inval_addr <= 1;
+				endcase
+			end else if (inst.csrrc && cpu_mode != 3) begin
+				case(csr_addr) 
+					12'h104 : sie <= sie & ~src1;
+					12'h105 : stvec <= stvec & ~src1;
+					12'h140 : sscratch <= sscratch & ~src1;
+					12'h141 : sepc <= sepc & ~src1;
+					12'h142 : scause <= scause & ~src1;
+					12'h143 : stval <= stval & ~src1;
+					12'h144 : sip <= sip & ~src1;
+					12'h180 : satp <= satp & ~src1;
+					default : csr_inval_addr <= 1;
+				endcase
+			end else if (cpu_mode == 3 && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
+				csr_unprivileged <= 1;
 			end
 		end
 	end
+
+	always @(posedge clk) begin
+		if(~rstn) begin
+			csr_result <= 0;
+		end else if (state == s_inst_decode) begin
+			csr_result <= 0;
+		end else if (state == s_inst_exec && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
+				case(csr_addr) 
+					12'h104 : csr_result <= sie;
+					12'h105 : csr_result <= stvec;
+					12'h140 : csr_result <= sscratch;
+					12'h141 : csr_result <= sepc;
+					12'h142 : csr_result <= scause;
+					12'h143 : csr_result <= stval;
+					12'h144 : csr_result <= sip;
+					12'h180 : csr_result <= satp;
+					default : csr_result <= 0;
+				endcase
+		end
+	end
+	// end csr
+
 
 	assign m_cpu_mode = cpu_mode;
 	
@@ -435,7 +489,8 @@ module core (
 			 inst.srli | inst.srai | inst.add | inst.sub | inst.sll | inst.slt |
 			 inst.sltu | inst.xor_ | inst.srl | inst.sra  | inst.or_  | inst.and_ |
 			 inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu |
-			 inst.jal | inst.jalr);
+			 inst.jal | inst.jalr | 
+			 inst.csrrw | inst.csrrs | inst.csrrc);
 	assign frd_enable = state == s_inst_write &&
 			(inst.fadd | inst.fsub | inst.fmul | inst.fdiv | inst.fsgnj | inst.fsgnjn | inst.flw);
 	assign result = 
@@ -448,6 +503,7 @@ module core (
 			(inst.jal | inst.jalr) ? pc + 32'd4 :
 			(inst.feq | inst.fle | inst.flt | 
 			 inst.fadd | inst.fsub | inst.fmul | inst.fdiv | inst.fsgnj | inst.fsgnjn) ? fpu_result :
+			 (inst.csrrw | inst.csrrs | inst.csrrc) ? csr_result :
 			32'b0;
 
 
@@ -552,7 +608,11 @@ module core (
 								default : load_result <= 0; // fault !?
 							endcase
 						end else if (inst.lw) begin
-							load_result <= m_axi_rdata;
+							if(addr[1:0] == 2'b0) begin
+								load_result <= m_axi_rdata;
+							end else begin
+								// misalign
+							end
 						end else if (inst.lbu) begin
 							case(addr[1:0])
 								2'b00: load_result <= {24'b0,m_axi_rdata[31:24]};
@@ -568,7 +628,11 @@ module core (
 								default : load_result <= 0; // fault !?
 							endcase
 						end else if (inst.flw) begin
-							load_result <= m_axi_rdata;
+							if(addr[1:0] == 2'b0) begin
+								load_result <= m_axi_rdata;
+							end else begin
+								//misalign
+							end
 						end
 						sub_state <= 0;
 						state <= s_inst_write;
@@ -579,7 +643,7 @@ module core (
 					m_axi_awaddr <= {addr[31:2],2'b00};
 					m_axi_awvalid <= 1;
 					m_axi_wvalid <= 1;
-					if(inst.sb) begin // strb
+					if(inst.sb) begin 
 						case(addr[1:0])
 							2'b00 : begin 
 								m_axi_wstrb <= 4'b1000;
@@ -609,14 +673,15 @@ module core (
 								m_axi_wstrb <= 4'b0011;
 								m_axi_wdata <= {16'b0,src2[15:0]};
 								end
-							default : m_axi_wstrb <= 0;
+							default : m_axi_wstrb <= 0; // misalign
 						endcase
-					end else if (inst.sw) begin
-						m_axi_wstrb <= 4'b1111;
-						m_axi_wdata <= src2;
-					end else if (inst.fsw) begin
-						m_axi_wstrb <= 4'b1111;
-						m_axi_wdata <= src2;
+					end else if (inst.sw | inst.fsw) begin
+						if(addr[1:0] == 0) begin\
+							m_axi_wstrb <= 4'b1111;
+							m_axi_wdata <= src2;
+						end else begin
+							m_axi_wstrb <= 0; // misalign
+						end
 					end
 					sub_state <= 1;
 				end else if (sub_state == 1) begin
@@ -638,7 +703,11 @@ module core (
 					end
 				end
 			end else begin // not mem ope
-				state <= s_inst_write;
+				if(csr_inval_addr | csr_unprivileged) begin
+					state <= s_inst_inval;
+				end else begin
+					state <= s_inst_write;
+				end
 			end
 		end else if (state == s_inst_write) begin
 			if(inst.jalr) begin
