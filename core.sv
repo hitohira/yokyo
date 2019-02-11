@@ -1,3 +1,5 @@
+`default_nettype none
+
 interface instif;
   reg lui;
   reg auipc;
@@ -346,7 +348,16 @@ module core (
 	output reg m_is_instr,
 
 	input wire m_throw_exception,
-	input wire [2:0] m_exception_vec
+	input wire [2:0] m_exception_vec,
+
+	// ex unit (mul div fpu)
+	output wire [19:0] ex_sig,
+	output wire [31:0] ex_src1,
+	output wire [31:0] ex_src2,
+	output wire ex_out_valid,
+	input wire [31:0] ex_result,
+	input wire [2:0] ex_exception,
+	input wire ex_in_valid
 
   );
 	
@@ -376,6 +387,7 @@ module core (
   reg [31:0] load_result;
   wire [31:0] fpu_result; // FPU
 	reg [31:0] csr_result;
+	reg [31:0] exu_result;
    
   wire [31:0] alu_src1;
   wire [31:0] alu_src2;
@@ -385,6 +397,20 @@ module core (
    
   alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result_), .inst(inst));
 	//fpu FPU(.clk(clk), .rstn(rstn), .src1(fsrc1), .src2(fsrc2), .result(fpu_result), .inst(inst));
+
+
+	//exu
+	wire is_exu;
+	assign is_exu = inst.mul | inst.mulh | inst.mulhsu | inst.mulhu |
+	                inst.div | inst.divu | inst.rem | inst.remu |
+	                inst.fadd | inst.fsub | inst.fmul | inst.fdiv |
+	                inst.feq | inst.flt | inst.fle | inst.fsgnj | inst.fsgnjn;
+	assign ex_sig = 
+		{3'b0,inst.fsgnjn,inst.fsgnj,inst.fle,inst.flt,inst.feq,inst.fdiv,inst.fmul,inst.fsub,inst.fadd,
+			inst.remu,inst.rem,inst.divu,inst.div,inst.mulhu,inst.mulhsu,inst.mulh,inst.mul };
+	assign ex_src1 = src1;
+	assign ex_src2 = src2;
+	assign ex_out_valid = is_exu && state == s_inst_exec;
 
 	// csr
 	reg [31:0] sie; // 0x104 sipに対応するenable bit、これが立っていると割込みがenable
@@ -490,7 +516,9 @@ module core (
 			 inst.sltu | inst.xor_ | inst.srl | inst.sra  | inst.or_  | inst.and_ |
 			 inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu |
 			 inst.jal | inst.jalr | 
-			 inst.csrrw | inst.csrrs | inst.csrrc);
+			 inst.csrrw | inst.csrrs | inst.csrrc |
+			 inst.mul | inst.mulh | imst.mulhsu | inst.mulhu |
+			 inst.div | inst.divu | inst.rem | inst.remu);
 	assign frd_enable = state == s_inst_write &&
 			(inst.fadd | inst.fsub | inst.fmul | inst.fdiv | inst.fsgnj | inst.fsgnjn | inst.flw);
 	assign result = 
@@ -501,8 +529,7 @@ module core (
 			 inst.xor_ | inst.srl | inst.sra  | inst.or_  | inst.and_) ? alu_result :
 			(inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.flw) ? load_result :
 			(inst.jal | inst.jalr) ? pc + 32'd4 :
-			(inst.feq | inst.fle | inst.flt | 
-			 inst.fadd | inst.fsub | inst.fmul | inst.fdiv | inst.fsgnj | inst.fsgnjn) ? fpu_result :
+			is_exu ? exu_result :
 			 (inst.csrrw | inst.csrrs | inst.csrrc) ? csr_result :
 			32'b0;
 
@@ -541,6 +568,8 @@ module core (
 			m_axi_wdata <= 0;
 			m_axi_wstrb <= 0;
 			m_axi_wvalid <= 0;
+
+			exu_result <= 0;
 		end else if (state == s_wait) begin
 			sub_state <= 0;
 			state <= s_inst_fetch;
@@ -702,6 +731,15 @@ module core (
 						state <= s_inst_write;
 					end
 				end
+			end else if (is_exu) begin // exu ope
+				if(ex_in_valid) begin
+					exu_result <= ex_result;
+					if(ex_exception != 0) begin
+						state <= s_inst_inval;
+					end else begin
+						state <= s_inst_write;
+					end
+				end
 			end else begin // not mem ope
 				if(csr_inval_addr | csr_unprivileged) begin
 					state <= s_inst_inval;
@@ -731,3 +769,4 @@ module core (
        
 endmodule
 
+`default_nettype wire

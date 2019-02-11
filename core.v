@@ -30,8 +30,15 @@ module core_wrapper (
 	output wire m_is_instr,
 
 	input wire m_throw_exception,
-	input wire [2:0] m_exception_vec
+	input wire [2:0] m_exception_vec,
 
+	output wire [19:0] ex_sig,
+	output wire [31:0] ex_src1,
+	output wire [31:0] ex_src2,
+	output wire ex_out_valid,
+	input wire [31:0] ex_result,
+	input wire [2:0] ex_exception,
+	input wire ex_in_valid
   );
   
 core u1(
@@ -64,7 +71,16 @@ core u1(
  m_satp,
  m_is_instr,
  m_throw_exception,
- m_exception_vec
+ m_exception_vec,
+
+ ex_sig,
+ ex_src1,
+ ex_src2,
+ ex_out_valid,
+ ex_result,
+ ex_exception,
+ ex_in_valid
+
 );
   
 endmodule
