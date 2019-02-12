@@ -69,7 +69,7 @@ module sim_uart_sub(
 				end
 				if(!rx_full) begin
 					// if you want to get data, fill in
-					rx_fifo[rx_head] <= 5;
+					rx_fifo[rx_head] <= 32'h33;
 					rx_head <= rx_head + 1;
 				end
 			end

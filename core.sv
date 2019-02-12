@@ -81,7 +81,7 @@ endinterface
 module decoder
  (
      input wire clk,
-     input rstn,
+     input wire rstn,
 
      output reg [4:0] rd,
      output reg [4:0] rs1,
@@ -372,11 +372,11 @@ module core (
   localparam EXCEPTION_STORE_PG_FAULT = 3'b011;
   localparam EXCEPTION_UNDEFINED = 3'b111;
 			
-	s_inst state = s_wait;
-	reg [5:0] sub_state;
+	(* mark_debug = "true" *) s_inst state = s_wait;
+	(* mark_debug = "true" *) reg [5:0] sub_state;
 
-	reg [31:0] instr;
-	reg [31:0] pc;
+	(* mark_debug = "true" *) reg [31:0] instr;
+	(* mark_debug = "true" *) reg [31:0] pc;
 	reg [1:0] cpu_mode;
 
   wire is_load;
@@ -386,7 +386,7 @@ module core (
 	reg [2:0] mem_exception_vec;
 	reg [2:0] exu_exception_vec;
 
-  instif inst();
+  (* mark_debug = "true" *) instif inst();
   wire [4:0] rd; // DEC
   wire rd_enable;
   wire frd_enable;
@@ -554,7 +554,7 @@ module core (
 			 inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu |
 			 inst.jal | inst.jalr | 
 			 inst.csrrw | inst.csrrs | inst.csrrc |
-			 inst.mul | inst.mulh | imst.mulhsu | inst.mulhu |
+			 inst.mul | inst.mulh | inst.mulhsu | inst.mulhu |
 			 inst.div | inst.divu | inst.rem | inst.remu);
 	assign frd_enable = state == s_inst_write &&
 			(inst.fadd | inst.fsub | inst.fmul | inst.fdiv | inst.fsgnj | inst.fsgnjn | inst.flw);
@@ -699,13 +699,13 @@ module core (
 							endcase
 						end
 						sub_state <= 3;
-					end else if (sub_state == 3) begin
-						sub_state <= 0;
-						if(mem_exception_vec == 0) begin
-							state <= s_inst_write;
-						end else begin
-							state <= s_inst_inval;
-						end
+					end
+				end else if (sub_state == 3) begin
+					sub_state <= 0;
+					if(mem_exception_vec == 0) begin
+						state <= s_inst_write;
+					end else begin
+						state <= s_inst_inval;
 					end
 				end
 			end else if (is_store) begin // sb,sh,sw,fsw

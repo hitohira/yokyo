@@ -26,12 +26,12 @@ module mmu(
 	output reg m_axi_wvalid,
 
 	// IO
-	input wire [7:0] io_in_data,
-	output reg io_in_rdy,
-	input wire io_in_vld,
-	output reg [7:0] io_out_data,
-	input wire io_out_rdy,
-	output reg io_out_vld,
+	(* mark_debug = "true" *) input wire [7:0] io_in_data,
+	(* mark_debug = "true" *) output reg io_in_rdy,
+	(* mark_debug = "true" *) input wire io_in_vld,
+	(* mark_debug = "true" *) output reg [7:0] io_out_data,
+	(* mark_debug = "true" *) input wire io_out_rdy,
+	(* mark_debug = "true" *) output reg io_out_vld,
 	input wire [4:0] io_err, // {resp[1],parity,frame,overrun,lost }
 
 	// from core
@@ -63,7 +63,7 @@ module mmu(
 	input wire [31:0] satp,
 	input wire is_instr,
 
-	output reg throw_exception,
+	(* mark_debug = "true" *) output reg throw_exception,
 	output reg [2:0] exception_vec
 	);
 
@@ -85,9 +85,9 @@ module mmu(
 		        write ? EXCEPTION_STORE_PG_FAULT : EXCEPTION_STORE_PG_FAULT;
 	endfunction
 
-	reg [5:0] state;
+	(* mark_debug = "true" *) reg [5:0] state;
 	reg [31:0] v_addr;
-	reg [33:0] p_addr;
+	(* mark_debug = "true" *) reg [33:0] p_addr;
 	reg [31:0] data;
 	reg [3:0] strb;
 	reg is_write;
