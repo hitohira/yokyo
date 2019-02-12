@@ -64,7 +64,10 @@ module mmu(
 	input wire is_instr,
 
 	(* mark_debug = "true" *) output reg throw_exception,
-	output reg [2:0] exception_vec
+	output reg [2:0] exception_vec,
+
+	output reg is_timer_intr,
+	output reg is_ext_intr
 	);
 
 	// little endian!!!!!!!!!!!
@@ -93,6 +96,9 @@ module mmu(
 	reg is_write;
 	reg [1:0] level;
 
+	reg [63:0] mtime;
+	reg [63:0] mtimecmp;
+
 	wire satp_mode;
 	wire [21:0] satp_ppn;
 	wire [9:0] vpn_1;
@@ -110,6 +116,26 @@ module mmu(
 	assign data_ppn_1 = data[31:20];
 	assign data_ppn_0 = data[19:10];
 	assign {data_d,data_a,data_g,data_u,data_x,data_w,data_r,data_v} = data[7:0];
+
+	always @(posedge clk) begin
+		if(~rstn) begin
+			is_timer_intr <= 0;
+		end else if(mtime >= mtimecmp) begin
+			is_timer_intr <= 1;
+		end else begin
+			is_timer_intr <= 0;
+		end
+	end
+
+	always @(posedge clk) begin
+		if(~rstn) begin
+			is_ext_intr <= 0;
+		end else if (io_in_vld) begin
+			is_ext_intr <= 1;
+		end else begin
+			is_ext_intr <= 0;
+		end
+	end
 
 	always @(posedge clk) begin
 		if(~rstn) begin
@@ -138,12 +164,16 @@ module mmu(
 
 			throw_exception <= 0;
 			exception_vec <= 0;
+
 			state <= 0;
 			v_addr <= 0;
 			p_addr <= 0;
 			data <= 0;
 			is_write <= 0;
 			level <= 0;
+
+			mtime <= 0;
+			mtimecmp <= 0;
 			//wait for core
 		end else if (state == 0) begin
 			c_axi_arready <= 1;
@@ -216,7 +246,7 @@ module mmu(
 				end else if(level == 0) begin
 					p_addr[21:0] <= {data_ppn_0,offset};
 				end
-				if(cpu_mode == 2'b11 && !data_u) begin // user?
+				if(cpu_mode == 2'b0 && !data_u) begin // user?
 					throw_exception <= 1;
 					exception_vec <= fault(is_instr,is_write);
 					state <= 12; //ret
@@ -314,6 +344,8 @@ module mmu(
 				strb <= c_axi_wstrb;
 				if(p_addr == 34'h80000004) begin // uart
 					state <= 24;
+				end else if (p_addr == 34'h80001000 || p_addr == 34'h800010004 || p_addr == 34'h800010008 || p_addr == 34'h80001000C) begin
+					state <= 30;
 				end else if (p_addr[33:31] == 3'b0) begin
 					state <= 15;
 				end else begin
@@ -364,6 +396,8 @@ module mmu(
 			if(p_addr == 34'h80000000) begin
 				io_in_rdy <= 1;
 				state <= 28;
+				end else if (p_addr == 34'h80001000 || p_addr == 34'h800010004 || p_addr == 34'h800010008 || p_addr == 34'h80001000C) begin
+					state <= 32;
 			end else if (p_addr[33:31] == 3'b0) begin
 				m_axi_araddr <= p_addr[31:0];
 				m_axi_arvalid <= 1;
@@ -403,7 +437,7 @@ module mmu(
 				io_out_vld <= 0;
 				c_axi_bresp <= 0;
 				c_axi_bvalid <= 1;
-				state <= 18;
+				state <= 18; // write end
 			end
 		end else if (state == 28) begin
 			if(io_in_vld) begin
@@ -413,6 +447,34 @@ module mmu(
 				c_axi_rvalid <= 1;
 				state <= 13; //read end
 			end
+		end else if (state == 30) begin // timer write
+			case(p_addr[3:0])
+				4'h0 : mtime[31:0] <= data;
+				4'h4 : mtime[63:32] <= data;
+				4'h8 : mtimecmp[31:0] <= data;
+				4'hC : mtimecmp[63:32] <= data;
+				default : begin
+					throw_exception <= 1;
+					exception_vec <= EXCEPTION_UNDEFINED;
+					end
+			endcase
+			c_axi_bresp <= 0;
+			c_axi_bvalid <= 1;
+			state <= 18; //write end
+		end else if (state == 32) begin // timer read
+			case(p_addr[3:0])
+				4'h0 : c_axi_rdata <= mtime[31:0];
+				4'h4 : c_axi_rdata <= mtime[63:32];
+				4'h8 : c_axi_rdata <= mtimecmp[31:0];
+				4'hC : c_axi_rdata <= mtimecmp[64:32];
+				default : begin
+					throw_exception <= 1;
+					exception_vec <= EXCEPTION_UNDEFINED;
+					end
+			endcase
+			c_axi_rresp <= 0;
+			c_axi_rvalid <= 1;
+			state <= 13; //read end
 		end
 	end // always
 

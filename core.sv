@@ -399,6 +399,9 @@ module core (
 	input wire m_throw_exception,
 	input wire [2:0] m_exception_vec,
 
+	input wire is_timer_intr,
+	input wire is_ext_intr,
+
 	// ex unit (mul div fpu)
 	output wire [19:0] ex_sig,
 	output wire [31:0] ex_src1,
@@ -420,7 +423,7 @@ module core (
 
 	(* mark_debug = "true" *) reg [31:0] instr;
 	(* mark_debug = "true" *) reg [31:0] pc;
-	reg [1:0] cpu_mode;
+	reg [1:0] cpu_mode; // 00->U, 01->S, 11->M
 
   wire is_load;
 	wire is_store;
@@ -472,7 +475,7 @@ module core (
 	assign ex_out_valid = is_exu && state == s_inst_exec;
 
 	// csr
-	reg [31:0] sstatus; // 0x100 Trapのネスト関係 SIE[1]が今のenable、SPIE[5]は前のenable、SPP[8]が前のモード(0=super,1=user) see mstatus
+	reg [31:0] sstatus; // 0x100 Trapのネスト関係 SIE[1]が今のenable、SPIE[5]は前のenable、SPP[8]が前のモード(0=user,1=super) see mstatus
 	reg [31:0] sie; // 0x104 sipに対応するenable bit、これが立っていると割込みがenable
 	reg [31:0] stvec; // 0x105 BASE[31:2]=trap時のジャンプのベースアドレス,MODE[1:0]=ジャンプアドレスの決め方(HWは書き換えない?)
 	reg [31:0] sscratch; // 0x140 コンテキストの保存場所を指すように使われる(HWは書き換えない?)
@@ -502,7 +505,7 @@ module core (
 			csr_inval_addr <= 0;
 			csr_unprivileged <= 0;
 		end else if (state == s_inst_exec) begin
-			if(inst.csrrw && cpu_mode != 3) begin
+			if(inst.csrrw && cpu_mode != 0) begin
 				case(csr_addr) 
 					12'h100 : sstatus <= src1;
 					12'h104 : sie <= src1;
@@ -515,7 +518,7 @@ module core (
 					12'h180 : satp <= src1;
 					default : csr_inval_addr <= 1;
 				endcase
-			end else if (inst.csrrs && cpu_mode != 3) begin
+			end else if (inst.csrrs && cpu_mode != 0) begin
 				case(csr_addr) 
 					12'h100 : sstatus <= sstatus | src1;
 					12'h104 : sie <= sie | src1;
@@ -528,7 +531,7 @@ module core (
 					12'h180 : satp <= satp | src1;
 					default : csr_inval_addr <= 1;
 				endcase
-			end else if (inst.csrrc && cpu_mode != 3) begin
+			end else if (inst.csrrc && cpu_mode != 0) begin
 				case(csr_addr) 
 					12'h100 : sstatus <= sstatus & ~src1;
 					12'h104 : sie <= sie & ~src1;
@@ -541,19 +544,33 @@ module core (
 					12'h180 : satp <= satp & ~src1;
 					default : csr_inval_addr <= 1;
 				endcase
-			end else if (cpu_mode == 3 && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
+			end else if (cpu_mode == 0 && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
 				csr_unprivileged <= 1;
 			end else if (inst.sret) begin
-				sstatus <= {23'b0,1'b1,2'b0,1'b1,3'b0,sstatus[5],1'b0};
+				sstatus <= {23'b0,1'b0,2'b0,1'b1,3'b0,sstatus[5],1'b0};
 			end
+		end else if (state == s_inst_write) begin
+			// 0 SEIP 0 STIP 0
+			sip <= sip | {22'b0,is_ext_intr,3'b0,is_timer_intr,5'b0};
 		end else if (state == s_inst_inval) begin // exception
 			sepc <= pc;
 			// 0 SPP 0 SPIE 0 SIE 0
-			sstatus <= {23'b0,cpu_mode[1],2'b0,sstatus[1],3'b0,1'b0,1'b0};
+			sstatus <= {23'b0,cpu_mode[0],2'b0,sstatus[1],3'b0,1'b0,1'b0};
+			if(occur_intr) begin
+				stval <= 0;
+				if(sie[9] & sip[9]) begin // ext
+					scause <= {1'b1,31'b0} | (1<<9);		
+				end else if (sie[5] & sip[5]) begin // timer
+					scause <= {1'b1,31'b0} | (1<<5);
+				end else if (sie[1] & sie[1]) begin // software
+					scause <= {1'b1,30'b0,1'b1};
+				end else begin
+					scause <= {1'b1,31'b0} | (1<<10);
+				end
 			if(inst.inval | csr_inval_addr | csr_unprivileged) begin // Illegal instruction
 				scause <= 1 << 2;
 				stval <= 0;
-			end else if (inst.ecall && cpu_mode == 2'b11) begin // Environment call from U-mode
+			end else if (inst.ecall && cpu_mode == 2'b0) begin // Environment call from U-mode
 				scause <= 1 << 8;
 				stval <= 0;
 			end else if (inst.ecall && cpu_mode == 2'b01) begin // Environment call from S-mode
@@ -634,7 +651,8 @@ module core (
   assign is_load = inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.flw;
 	assign is_store = inst.sb | inst.sh | inst.sw | inst.fsw;
   assign addr = src1 + imm;   
-
+	
+	assign occur_intr = sstatus[1] &&	((sie[9] & sip[9]) || (sie[5] & sip[5]) || (sie[1] & sip[1]));
 	
 	always @(posedge clk) begin
 		if (~rstn) begin 
@@ -662,11 +680,15 @@ module core (
 			state <= s_inst_fetch;
 		end else if (state == s_inst_fetch) begin 
 			if(sub_state == 0) begin
-				mem_exception_vec <= 0;
-				m_axi_araddr <= pc;
-				m_axi_arvalid <= 1;
-				m_is_instr <= 1;
-				sub_state <= 1;
+				if(occur_intr) begin // interrupt
+					state <= s_inst_inval;
+				end else begin
+					mem_exception_vec <= 0;
+					m_axi_araddr <= pc;
+					m_axi_arvalid <= 1;
+					m_is_instr <= 1;
+					sub_state <= 1;
+				end
 			end else if (sub_state == 1) begin
 				if(m_axi_arready) begin
 					m_axi_arvalid <= 0;
@@ -866,7 +888,8 @@ module core (
 					pc <= pc + imm;
 				end
 			end else if (inst.sret) begin
-				pc <= {sepc[31:2],2'b00};
+				pc <= {sepc[31:2],2'b0};
+				cpu_mode <= {1'b0,sstatus[8]};
 			end else begin
 				pc <= pc + 32'd4;
 			end

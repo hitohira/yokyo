@@ -32,6 +32,9 @@ module core_wrapper (
 	input wire m_throw_exception,
 	input wire [2:0] m_exception_vec,
 
+	input wire is_timer_intr,
+	input wire is_ext_intr,
+
 	output wire [19:0] ex_sig,
 	output wire [31:0] ex_src1,
 	output wire [31:0] ex_src2,
@@ -72,6 +75,9 @@ core u1(
  m_is_instr,
  m_throw_exception,
  m_exception_vec,
+
+ is_timer_intr,
+ is_ext_intr,
 
  ex_sig,
  ex_src1,
