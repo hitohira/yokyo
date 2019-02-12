@@ -92,6 +92,8 @@ module IOcontroller (
 			in_state <= 0;
 			out_state <= 0;
 			rbuf_hd <= 0;
+	//		rbuf_data[0] <= 8'h33;
+	//		rbuf_hd <= 1;
 			rbuf_tl <= 0;
 			wbuf_hd <= 0;
 			wbuf_tl <= 0;

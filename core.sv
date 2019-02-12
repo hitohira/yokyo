@@ -84,8 +84,8 @@ module decoder
      input wire rstn,
 
      output reg [4:0] rd,
-     output reg [4:0] rs1,
-     output reg [4:0] rs2,
+     output wire [4:0] rs1,
+     output wire [4:0] rs2,
      output reg [31:0] imm,
 		 output reg [11:0] csr,
 
@@ -117,10 +117,11 @@ module decoder
     wire j_type;
     assign j_type = ((inst_code[6:5] == 2'b11) && (inst_code[4:2] == 3'b011));
 
+    assign rs1 = (r_type | i_type | s_type | b_type) ? inst_code[19:15] : 5'd0;
+    assign rs2 = (r_type | s_type | b_type) ? inst_code[24:20] : 5'd0;
+
     always @(posedge clk) begin
         rd <= (r_type | i_type | u_type | j_type) ? inst_code[11:7] : 5'd0;
-        rs1 <= (r_type | i_type | s_type | b_type) ? inst_code[19:15] : 5'd0;
-        rs2 <= (r_type | s_type | b_type) ? inst_code[24:20] : 5'd0;
 				csr <= inst_code[31:20];
 
         imm <= i_type ? {{21{inst_code[31]}}, inst_code[30:20]} :
@@ -230,8 +231,10 @@ module register
     );
     reg [31:0] iregs[32];
     
-    assign rs1 = rs1_idx == 0 ? 32'd0 : iregs[rs1_idx];
-    assign rs2 = rs2_idx == 0 ? 32'd0 : iregs[rs2_idx];
+		always @(posedge clk) begin
+      rs1 <= rs1_idx == 0 ? 32'd0 : iregs[rs1_idx];
+      rs2 <= rs2_idx == 0 ? 32'd0 : iregs[rs2_idx];
+		end
     
     assign iregs[0] = 32'd0;
     
@@ -268,8 +271,10 @@ module fregister
     );
     reg [31:0] fregs[32];
     
-    assign rs1 = fregs[rs1_idx];
-    assign rs2 = fregs[rs2_idx];
+		always @(posedge clk) begin
+      rs1 <= fregs[rs1_idx];
+      rs2 <= fregs[rs2_idx];
+		end
     
     generate
         genvar i;
@@ -297,27 +302,65 @@ module alu
     output reg [31:0] result,
     instif inst
  );
+
+		reg [31:0] d_add;
+		reg [31:0] d_sub;
+		reg [31:0] d_slt;
+		reg [31:0] d_sltu;
+		reg [31:0] d_xor_;
+		reg [31:0] d_or_;
+		reg [31:0] d_and_;
+		reg [31:0] d_sll;
+		reg [31:0] d_srl;
+		reg [31:0] d_sra;
+		reg [31:0] d_beq;
+		reg [31:0] d_bne;
+		reg [31:0] d_blt;
+		reg [31:0] d_bge;
+		reg [31:0] d_bltu;
+		reg [31:0] d_bgeu;
+		always @(posedge clk) begin
+			d_add <= src1 + src2;
+			d_sub <= src1 - src2;
+			d_slt <= $signed(src1) < $signed(src2);
+			d_sltu <= src1 < src2;
+			d_xor_ <= src1 ^ src2;
+			d_or_ <= src1 | src2;
+			d_and_ <= src1 & src2;
+			d_sll <= src1 << src2;
+			d_srl <= src1 >> src2;
+			d_sra <= $signed(src1) >>> $signed(src2);
+			d_beq <= src1 == src2;
+			d_bne <= src1 != src2;
+			d_blt <= $signed(src1) < $signed(src2);
+			d_bge <= $signed(src1) >= $signed(src2);
+			d_bltu <= src1 < src2;
+			d_bgeu <= src1 >= src2;
+		end
+
     always @(posedge clk) begin
         if (~rstn) begin
             result <= 32'd0;
         end else begin
-            result <= (inst.add | inst.addi) ? src1 + src2 : 
-                      (inst.sub)             ? src1 - src2 :
-                      (inst.slti | inst.slt) ? $signed(src1) < $signed(src2) :
-                      (inst.sltiu | inst.sltu) ? src1 < src2 :
-                      (inst.xori | inst.xor_) ? src1 ^ src2:
-                      (inst.ori | inst.or_) ? src1 | src2:
-                      (inst.andi | inst.and_) ? src1 & src2:
-                      (inst.slli | inst.sll) ? src1 << src2:
-                      (inst.srli | inst.srl) ? src1 >> src2:
-                      (inst.srai | inst.sra) ? $signed(src1) >>> $signed(src2):
-                      (inst.beq) ? src1 == src2:
-                      (inst.bne) ? src1 != src2:
-                      (inst.blt) ? $signed(src1) < $signed(src2):
-                      (inst.bge) ? $signed(src1) >= $signed(src2):
-                      (inst.bltu) ? src1 < src2:
-                      (inst.bgeu) ? src1 >= src2:
-                      32'd0;
+			//			result <= result_;
+						
+            result <= (inst.add | inst.addi) ? d_add : // src1 + src2 : 
+                       (inst.sub)             ? d_sub : //src1 - src2 :
+                       (inst.slti | inst.slt) ? d_slt : //$signed(src1) < $signed(src2) :
+                       (inst.sltiu | inst.sltu) ? d_sltu : // src1 < src2 :
+                       (inst.xori | inst.xor_) ? d_xor_ : //src1 ^ src2:
+                       (inst.ori | inst.or_) ? d_or_ : //src1 | src2:
+                       (inst.andi | inst.and_) ? d_and_ : // src1 & src2:
+                       (inst.slli | inst.sll) ? d_sll : //src1 << src2:
+                       (inst.srli | inst.srl) ? d_srl : //src1 >> src2:
+                       (inst.srai | inst.sra) ? d_sra : //$signed(src1) >>> $signed(src2):
+                       (inst.beq) ? d_beq ://src1 == src2:
+                       (inst.bne) ? d_bne : //src1 != src2:
+                       (inst.blt) ? d_blt : //$signed(src1) < $signed(src2):
+                       (inst.bge) ? d_bge : //$signed(src1) >= $signed(src2):
+                       (inst.bltu) ? d_bltu : //src1 < src2:
+                       (inst.bgeu) ? d_bgeu : //src1 >= src2:
+                       32'd0;
         end
     end 
 endmodule
@@ -399,8 +442,7 @@ module core (
   wire [31:0] fsrc1; // REG
   wire [31:0] fsrc2; // REG
 	wire [31:0] result;
-  wire [31:0] alu_result_; // ALU
-	reg [31:0] alu_result;
+	wire [31:0] alu_result; // ALU
   reg [31:0] load_result;
   wire [31:0] fpu_result; // FPU
 	reg [31:0] csr_result;
@@ -412,7 +454,7 @@ module core (
   register REGISTER(.clk(clk), .rstn(rstn), .rd_idx(rd), .rd_enable(rd_enable), .rs1_idx(rs1), .rs2_idx(rs2), .data(result), .rs1(src1), .rs2(src2));
   fregister FREGISTER(.clk(clk), .rstn(rstn), .rd_idx(rd), .rd_enable(frd_enable), .rs1_idx(rs1), .rs2_idx(rs2), .data(result), .rs1(fsrc1), .rs2(fsrc2));
    
-  alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result_), .inst(inst));
+  alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result), .inst(inst));
 	//fpu FPU(.clk(clk), .rstn(rstn), .src1(fsrc1), .src2(fsrc2), .result(fpu_result), .inst(inst));
 
 
@@ -581,9 +623,6 @@ module core (
 	assign is_store = inst.sb | inst.sh | inst.sw | inst.fsw;
   assign addr = src1 + imm;   
 
-	always @(posedge clk) begin
-		alu_result <= alu_result_;
-	end
 	
 	always @(posedge clk) begin
 		if (~rstn) begin 

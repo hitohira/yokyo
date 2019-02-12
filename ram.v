@@ -10,7 +10,7 @@ module distram(
 
 	reg [13:0] mem [WORDS-1:0];
 
-	assign dout <= mem[addr];
+	assign dout = mem[addr];
 
 	always @(posedge clk) begin
 		if(we) begin

@@ -34,7 +34,7 @@ module BramController (
 	);
 
 	//assume addr 4byte aligned
-	// memory optional output reg not used 
+	// memory optional output reg used !!!
 
 	reg [3:0] state;
 
@@ -81,11 +81,13 @@ module BramController (
 		end else if (state == 3) begin // read
 			state <= 4;
 		end else if (state == 4) begin
+			state <= 5;
+		end else if (state == 5) begin
 			s_axi_rdata <= bram_dout;	
 			s_axi_rresp <= 2'b00; // not used
 			s_axi_rvalid <= 1;
-			state <= 5;
-		end else if (state == 5) begin
+			state <= 6;
+		end else if (state == 6) begin
 			if(s_axi_rready) begin
 				s_axi_rvalid <= 0;
 				state <= 0;
