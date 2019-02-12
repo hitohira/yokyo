@@ -472,6 +472,7 @@ module core (
 	assign ex_out_valid = is_exu && state == s_inst_exec;
 
 	// csr
+	reg [31:0] sstatus; // 0x100 Trapのネスト関係 SIE[1]が今のenable、SPIE[5]は前のenable、SPP[8]が前のモード(0=super,1=user) see mstatus
 	reg [31:0] sie; // 0x104 sipに対応するenable bit、これが立っていると割込みがenable
 	reg [31:0] stvec; // 0x105 BASE[31:2]=trap時のジャンプのベースアドレス,MODE[1:0]=ジャンプアドレスの決め方(HWは書き換えない?)
 	reg [31:0] sscratch; // 0x140 コンテキストの保存場所を指すように使われる(HWは書き換えない?)
@@ -486,6 +487,7 @@ module core (
 	
 	always @(posedge clk) begin
 		if(~rstn) begin
+			sstatus <= 0;
 			sie <= 0;
 			stvec <= 0;
 			sscratch <= 0;
@@ -502,6 +504,7 @@ module core (
 		end else if (state == s_inst_exec) begin
 			if(inst.csrrw && cpu_mode != 3) begin
 				case(csr_addr) 
+					12'h100 : sstatus <= src1;
 					12'h104 : sie <= src1;
 					12'h105 : stvec <= src1;
 					12'h140 : sscratch <= src1;
@@ -514,6 +517,7 @@ module core (
 				endcase
 			end else if (inst.csrrs && cpu_mode != 3) begin
 				case(csr_addr) 
+					12'h100 : sstatus <= sstatus | src1;
 					12'h104 : sie <= sie | src1;
 					12'h105 : stvec <= stvec | src1;
 					12'h140 : sscratch <= sscratch | src1;
@@ -526,6 +530,7 @@ module core (
 				endcase
 			end else if (inst.csrrc && cpu_mode != 3) begin
 				case(csr_addr) 
+					12'h100 : sstatus <= sstatus & ~src1;
 					12'h104 : sie <= sie & ~src1;
 					12'h105 : stvec <= stvec & ~src1;
 					12'h140 : sscratch <= sscratch & ~src1;
@@ -538,26 +543,33 @@ module core (
 				endcase
 			end else if (cpu_mode == 3 && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
 				csr_unprivileged <= 1;
+			end else if (inst.sret) begin
+				sstatus <= {23'b0,1'b1,2'b0,1'b1,3'b0,sstatus[5],1'b0};
 			end
 		end else if (state == s_inst_inval) begin // exception
 			sepc <= pc;
+			// 0 SPP 0 SPIE 0 SIE 0
+			sstatus <= {23'b0,cpu_mode[1],2'b0,sstatus[1],3'b0,1'b0,1'b0};
 			if(inst.inval | csr_inval_addr | csr_unprivileged) begin // Illegal instruction
-				scause <= 2;
+				scause <= 1 << 2;
 				stval <= 0;
 			end else if (inst.ecall && cpu_mode == 2'b11) begin // Environment call from U-mode
-				scause <= 8;
+				scause <= 1 << 8;
 				stval <= 0;
 			end else if (inst.ecall && cpu_mode == 2'b01) begin // Environment call from S-mode
-				scause <= 9;
+				scause <= 1 << 9;
 				stval <= 0;
 			end else if (mem_exception_vec != 0) begin
 				case(mem_exception_vec) 
-					EXCEPTION_INSTR_PG_FAULT : scause <= 1;
-					EXCEPTION_LOAD_PG_FAULT  : scause <= 5;
-					EXCEPTION_STORE_PG_FAULT : scause <= 15;
-					default : scause <= 0; // ?????????????????????
+					EXCEPTION_INSTR_PG_FAULT : scause <= 1 << 1;
+					EXCEPTION_LOAD_PG_FAULT  : scause <= 1 << 5;
+					EXCEPTION_STORE_PG_FAULT : scause <= 1 << 15;
+					default : scause <= 1 << 16; // ?????????????????????
 				endcase
 				stval <= addr;
+			end else begin
+				scause <= 1 << 16;
+				stval <= 0;
 			end
 		end
 	end // always
@@ -853,6 +865,8 @@ module core (
 				end else begin
 					pc <= pc + imm;
 				end
+			end else if (inst.sret) begin
+				pc <= {sepc[31:2],2'b00};
 			end else begin
 				pc <= pc + 32'd4;
 			end
