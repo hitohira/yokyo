@@ -544,10 +544,10 @@ module core (
 					12'h180 : satp <= satp & ~src1;
 					default : csr_inval_addr <= 1;
 				endcase
-			end else if (cpu_mode == 0 && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
-				csr_unprivileged <= 1;
-			end else if (inst.sret) begin
+			end else if (inst.sret && cpu_mode != 0) begin
 				sstatus <= {23'b0,1'b0,2'b0,1'b1,3'b0,sstatus[5],1'b0};
+			end else if (cpu_mode == 0 && (inst.csrrw | inst.csrrs | inst.csrrc | inst.sret)) begin
+				csr_unprivileged <= 1;
 			end
 		end else if (state == s_inst_write) begin
 			// 0 SEIP 0 STIP 0
@@ -660,7 +660,7 @@ module core (
 			sub_state <= 0;
 			instr <= 0;
 			pc <= 0;
-			cpu_mode <= 0;
+			cpu_mode <= 2'b01; // S mode
 
 			//mmu reg
 			m_axi_araddr <= 0;
