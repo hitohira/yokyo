@@ -1,9 +1,9 @@
 module fdiv(
+    input wire clk,
     input wire [31:0] x1,
     input wire [31:0] x2,
-    output wire [31:0] y,
-    input wire clk,
-    input wire rstn);
+    output reg [31:0] y // 8
+    );
 
     function [34:0] TDATA (
 	input [9:0] MAL
@@ -1034,106 +1034,131 @@ module fdiv(
         10'd1021: TDATA = 35'b00000000010100000000101000000001100;
         10'd1022: TDATA = 35'b00000000001100000000011000000000100;
         10'd1023: TDATA = 35'b00000000000100000000001000000000000;
+				default : TDATA = 35'b0;
         endcase
     end
     endfunction
 
-    reg sy_reg1,sy_reg2;
-    reg [7:0] ey0_reg1,ey1_reg1,ey0_reg2,ey1_reg2;
-    reg [12:0] mx0_reg;
-    reg [22:0] mx_reg1,mx_reg2,mix2_reg;
-    reg [24:0] max02a_reg;
-
-    // stage1
-    wire sx,sy;
-    wire [7:0] ex,ey;
-    wire [22:0] mx,my;
+    wire sx,sy; // 0
+    wire [7:0] ex,ey; // 0
+    wire [22:0] mx,my; // 0
     assign sx = x1[31];
     assign ex = x1[30:23];
     assign mx = x1[22:0];
 
-    wire sa;
-    wire [7:0] ea;
-    wire [22:0] ma;
+    wire sa; // 0
+    wire [7:0] ea; // 0
+    wire [22:0] ma; // 0
     assign sa = x2[31:31];
     assign ea = x2[30:23];
     assign ma = x2[22:0];
 
     assign sy = sx ^ sa;
 
-    wire [9:0] mal;
+    wire [9:0] mal; // 0
     assign mal = x2[22:13];
 
-    wire [34:0] tdata;
-    assign tdata = TDATA(mal);
+    reg [34:0] tdata; // 1
+		always @(posedge clk) begin
+    	tdata <= TDATA(mal);
+		end
     
-    wire [11:0] mx0;
-    wire [22:0] mx02;
+    wire [11:0] mx0; // 1
+    wire [22:0] mx02; // 1
     assign mx0 = tdata[34:23];
     assign mx02 = tdata[22:0];
 
-    wire [47:0] max02a;
-    assign max02a = {1'b1,ma} * {1'b1,mx02};
+		wire [23:0] maex,mx02ex; // 1
+		assign maex = {1'b1,ma};
+		assign mx02ex = {1'b1,mx02};
+		
+		wire [11:0] maex_h,maex_l,mx02ex_h,mx02ex_l; // 1
+		assign maex_h = maex[23:12];
+		assign maex_l = maex[11:0];
+		assign mx02ex_h = mx02ex[23:12];
+		assign mx02ex_l = mx02ex[11:0];
+		
+		reg [23:0] mxll,mxlh,mxhl,mxhh; // 2
+		always @(posedge clk) begin
+			mxll <= maex_l * mx02ex_l;
+			mxlh <= maex_l * mx02ex_h;
+			mxhl <= maex_h * mx02ex_l;
+			mxhh <= maex_h * mx02ex_h;
+		end
 
-    wire [8:0] eya0,eya1;
+		wire [47:0] mxhhll; // 2
+		assign mxhhll = {mxhh,mxll};
+
+		reg [24:0] mxhllh; // 3
+		always @ (posedge clk) begin
+			mxhllh = mxhl + mxlh;
+		end
+
+    wire [47:0] max02a; // 3
+    assign max02a = {mxhhll[47:12]+mxhllh,mxhhll[11:0]};
+
+    wire [8:0] eya0,eya1; // 0
     assign eya0 = (ex == 0) ? 0: ex + 126;
     assign eya1 = (ex == 0) ? 0: ex + 127;
 
-    wire [7:0] ey0,ey1;
-    assign ey0 = (eya0 > ea) ? eya0 - ea: 0;
-    assign ey1 = (eya1 > ea) ? eya1 - ea: 0;
+    reg [7:0] ey0,ey1; // 1
+		always @ (posedge clk) begin
+    	ey0 <= (eya0 > ea) ? eya0 - ea: 0;
+    	ey1 <= (eya1 > ea) ? eya1 - ea: 0;
+		end
 
-    // stage2
-    wire [22:0] max02;
+		reg [24:0] max02a_reg; // 4
+		always @(posedge clk) begin
+			max02a_reg <= max02a[47:23];
+		end
+
+    wire [22:0] max02; // 4
     assign max02 = (max02a_reg[24]) ? max02a_reg[23:1]: max02a_reg[22:0];
 
-    wire [24:0] mix2a;
-    assign mix2a = {1'b1,mx0_reg,12'b0} - {2'b01,max02};
+    wire [24:0] mix2a; // 4
+    assign mix2a = {1'b1,mx0,12'b0} - {2'b01,max02};
 
-    wire [22:0] mix2;
-    assign mix2 = mix2a[22:0];
+    reg [22:0] mix2; // 5
+		always @(posedge clk) begin
+    	mix2 <= mix2a[22:0];
+		end
+		
+		wire [23:0] mxex,mix2ex; // 5
+		assign mxex = {1'b1,mx};
+		assign mix2ex = {1'b1,mix2};
 
-    // stage3
-    wire [47:0] mya;
-    assign mya = {1'b1,mx_reg2} * {1'b1,mix2_reg};
+		wire [11:0] mxex_h,mxex_l,mix2ex_h,mix2ex_l; // 5
+		assign mxex_h = mxex[23:12];
+		assign mxex_l = mxex[11:0];
+		assign mix2ex_h = mix2ex[23:12];
+		assign mix2ex_l = mix2ex[11:0];
+
+		reg [23:0] myll,mylh,myhl,myhh; // 6
+		always @(posedge clk) begin
+			myll <= mxex_l * mix2ex_l;
+			mylh <= mxex_l * mix2ex_h;
+			myhl <= mxex_h * mix2ex_l;
+			myhh <= mxex_h * mix2ex_h;
+		end
+		
+		wire [47:0] myhhll; // 6
+		assign myhhll = {myhh,myll};
+
+		reg [24:0] myhllh; // 7
+		always @(posedge clk) begin
+			myhllh <= myhl + mylh;
+		end
+
+    wire [47:0] mya; // 7
+    assign mya = {myhhll[47:12]+myhllh,myhhll[11:0]};
 
     wire a;
     assign a = mya[47:47];
     assign my = (a) ? mya[46:24]: mya[45:23];
-    assign ey = (a) ? ey1_reg2: ey0_reg2;
+    assign ey = (a) ? ey1: ey0;
 
-    assign y = {sy_reg2,ey,my};
-
-    always @(posedge clk) begin
-        // stage1
-        sy_reg1 <= sy;
-        mx_reg1 <= mx;
-        mx0_reg <= mx0;
-        max02a_reg <= max02a[47:23];
-        ey0_reg1 <= ey0;
-        ey1_reg1 <= ey1;
-
-        // stage2
-        sy_reg2 <= sy_reg1;
-        mx_reg2 <= mx_reg1;
-        mix2_reg <= mix2;
-        ey0_reg2 <= ey0_reg1;
-        ey1_reg2 <= ey1_reg1;
-
-    end
-
-    always @(negedge rstn) begin
-       sy_reg1 <= 0;
-       sy_reg2 <= 0; 
-       ey0_reg1 <= 0;
-       ey1_reg1 <= 0;
-       ey0_reg2 <= 0;
-       ey1_reg2 <= 0;
-       mx0_reg <= 0;
-       mx_reg1 <= 0;
-       mx_reg2 <= 0;
-       mix2_reg <= 0;
-       max02a_reg <= 0;
-    end
+		always @(posedge clk) begin
+    y <= {sy,ey,my};
+		end
 
 endmodule

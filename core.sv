@@ -563,7 +563,7 @@ module core (
 				end else if (sie[5] & sip[5]) begin // timer
 					scause <= {1'b1,31'b0} | (1<<5);
 				end else if (sie[1] & sie[1]) begin // software
-					scause <= {1'b1,30'b0,1'b1};
+					scause <= {1'b1,31'b0} | (1<<1);
 				end else begin
 					scause <= {1'b1,31'b0} | (1<<10);
 				end
@@ -651,7 +651,8 @@ module core (
   assign is_load = inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.flw;
 	assign is_store = inst.sb | inst.sh | inst.sw | inst.fsw;
   assign addr = src1 + imm;   
-	
+
+	wire occur_intr;	
 	assign occur_intr = sstatus[1] &&	((sie[9] & sip[9]) || (sie[5] & sip[5]) || (sie[1] & sip[1]));
 	
 	always @(posedge clk) begin

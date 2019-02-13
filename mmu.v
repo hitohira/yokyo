@@ -88,7 +88,7 @@ module mmu(
 		        write ? EXCEPTION_STORE_PG_FAULT : EXCEPTION_STORE_PG_FAULT;
 	endfunction
 
-	(* mark_debug = "true" *) reg [5:0] state;
+	(* mark_debug = "true" *) reg [6:0] state;
 	reg [31:0] v_addr;
 	(* mark_debug = "true" *) reg [33:0] p_addr;
 	reg [31:0] data;
@@ -116,6 +116,23 @@ module mmu(
 	assign data_ppn_1 = data[31:20];
 	assign data_ppn_0 = data[19:10];
 	assign {data_d,data_a,data_g,data_u,data_x,data_w,data_r,data_v} = data[7:0];
+
+	always @(posedge clk) begin
+		if(~rstn) begin
+			mtime <= 0;
+			mtimecmp <= 0;
+		end else if (state == 30) begin // timer write state
+			case(p_addr[3:0])
+				4'h0 : mtime[31:0] <= data;
+				4'h4 : mtime[63:32] <= data;
+				4'h8 : mtimecmp[31:0] <= data;
+				4'hC : mtimecmp[63:32] <= data;
+				default : mtime <= mtime;
+			endcase
+		end else begin
+			mtime <= mtime + 1'b1;
+		end
+	end
 
 	always @(posedge clk) begin
 		if(~rstn) begin
@@ -172,8 +189,6 @@ module mmu(
 			is_write <= 0;
 			level <= 0;
 
-			mtime <= 0;
-			mtimecmp <= 0;
 			//wait for core
 		end else if (state == 0) begin
 			c_axi_arready <= 1;
@@ -448,16 +463,6 @@ module mmu(
 				state <= 13; //read end
 			end
 		end else if (state == 30) begin // timer write
-			case(p_addr[3:0])
-				4'h0 : mtime[31:0] <= data;
-				4'h4 : mtime[63:32] <= data;
-				4'h8 : mtimecmp[31:0] <= data;
-				4'hC : mtimecmp[63:32] <= data;
-				default : begin
-					throw_exception <= 1;
-					exception_vec <= EXCEPTION_UNDEFINED;
-					end
-			endcase
 			c_axi_bresp <= 0;
 			c_axi_bvalid <= 1;
 			state <= 18; //write end
