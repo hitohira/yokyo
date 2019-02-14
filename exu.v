@@ -93,13 +93,30 @@ module exu(
 	wire [31:0] fadd_result,fmul_result,fdiv_result;
 	wire feq_result,flt_result,fle_result;
 	wire [31:0] fsgnj_result,fsgnjn_result;
+	wire [31:0] divq,divr;
 
 	mul mul_u (src1,src2,mul_result,clk);
 	mulh mulh_u (src1,src2,mulh_result,clk);
 	mulhsu mulhsu_u (src1,src2,mulhsu_result,clk);
 	mulhu mulhu_u (src1,src2,mulhu_result,clk);
 
-	fadd fadd_u (clk,src1,src2,fadd_result);
+	reg [63:0] divx;
+	reg  [31:0] divd;
+	reg sigx,sigd;
+	wire [31:0] src1neg,src2neg;
+	assign src1neg = (~src1) + 1'b1;
+	assign src2neg = (~src2) + 1'b1;
+	always @(posedge clk) begin
+		divx <= (idiv | irem) && src1[31] ? {32'b0,src1neg} : {32'b0,src1};
+		divd <= (idiv | irem) && src2[31] ? src2neg : src2;
+		sigx <= src1[31];
+		sigd <= src2[31];
+	end
+	div32 div_u(clk,divx,divd,divq,divr);
+
+	wire [31:0] fadd_src2;
+	assign fadd_src2 = ifsub ? {~src2[31],src2[30:0]} : src2;
+	fadd fadd_u (clk,src1,fadd_src2,fadd_result);
 	fmul fmul_u (clk,src1,src2,fmul_result);
 	fdiv fdiv_u (clk,src1,src2,fdiv_result);
 
@@ -128,27 +145,43 @@ module exu(
 		end else if (imulhu && counter == 5) begin
 			ex_in_valid <= 1;
 			ex_result <= mulhu_result;
-		end else if (idiv) begin
+		end else if (idiv && counter == 17) begin
 			ex_in_valid <= 1;
-
-		end else if (idivu) begin
+			if(sigx && sigd) begin // - / -
+				ex_result <= divq;
+			end else if (sigx && !sigd) begin // - / +
+				ex_result <= (~divq) + 1'b1;
+			end else if (!sigx && sigd) begin // + / -
+				ex_result <= (~divq) + 1'b1;
+			end else begin // + / +
+				ex_result <= divq;
+			end
+		end else if (idivu && counter == 17) begin
 			ex_in_valid <= 1;
-
-		end else if (irem) begin
+			ex_result <= divq;
+		end else if (irem && counter == 17) begin
 			ex_in_valid <= 1;
-
-		end else if (iremu) begin
+			if(sigx && sigd) begin // - / -
+				ex_result <= (~divr) + 1'b1;
+			end else if (sigx && !sigd) begin // - / +
+				ex_result <= (~divr) + 1'b1;
+			end else if (!sigx && sigd) begin // + / -
+				ex_result <= divr;
+			end else begin // + / +
+				ex_result <= divr;
+			end
+		end else if (iremu && counter == 17) begin
 			ex_in_valid <= 1;
-
+			ex_result <= divr;
 		end else if ((ifadd || ifsub) && counter == 2) begin
 			ex_in_valid <= 1;
-
+			ex_result <= fadd_result;
 		end else if (ifmul && counter == 3) begin
 			ex_in_valid <= 1;
-
+			ex_result <= fmul_result;
 		end else if (ifdiv && counter == 8) begin
 			ex_in_valid <= 1;
-
+			ex_result <= fdiv_result;
 		end else if (ifeq) begin
 			ex_in_valid <= 1;
 			ex_result <= feq_result;

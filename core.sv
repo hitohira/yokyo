@@ -165,14 +165,14 @@ module decoder
 
         inst.add  <= (opcode == 7'b0110011) && (funct3 == 3'b000) && (funct7 == 7'b0000000);
         inst.sub  <= (opcode == 7'b0110011) && (funct3 == 3'b000) && (funct7 == 7'b0100000);
-        inst.sll  <= (opcode == 7'b0110011) && (funct3 == 3'b001);
-        inst.slt  <= (opcode == 7'b0110011) && (funct3 == 3'b010);
-        inst.sltu <= (opcode == 7'b0110011) && (funct3 == 3'b011);
-        inst.xor_ <= (opcode == 7'b0110011) && (funct3 == 3'b100);
+        inst.sll  <= (opcode == 7'b0110011) && (funct3 == 3'b001) && (funct7 == 7'b0);;
+        inst.slt  <= (opcode == 7'b0110011) && (funct3 == 3'b010) && (funct7 == 7'b0);
+        inst.sltu <= (opcode == 7'b0110011) && (funct3 == 3'b011) && (funct7 == 7'b0);
+        inst.xor_ <= (opcode == 7'b0110011) && (funct3 == 3'b100) && (funct7 == 7'b0);
         inst.srl  <= (opcode == 7'b0110011) && (funct3 == 3'b101) && (funct7 == 7'b0000000);
         inst.sra  <= (opcode == 7'b0110011) && (funct3 == 3'b101) && (funct7 == 7'b0000000);
-        inst.or_  <= (opcode == 7'b0110011) && (funct3 == 3'b110);
-        inst.and_ <= (opcode == 7'b0110011) && (funct3 == 3'b111);
+        inst.or_  <= (opcode == 7'b0110011) && (funct3 == 3'b110) && (funct7 == 7'b0);
+        inst.and_ <= (opcode == 7'b0110011) && (funct3 == 3'b111) && (funct7 == 7'b0);
         
         inst.fadd <= (opcode == 7'b1010011) && (funct7 == 7'b0000000);
         inst.fsub <= (opcode == 7'b1010011) && (funct7 == 7'b0000100);
