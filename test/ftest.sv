@@ -2,18 +2,19 @@
 `default_nettype none
 
 module ftest 
-    #(parameter NSTAGE = 3)
+    #(parameter NSTAGE = 7)
     ();
     wire [31:0] y,old_y;
 		logic [31:0] x1,x2;
     logic clk;
+		logic rstn;
 		logic [4:0] counter;
 
     int i,j;
 
 
-    fadd u_new (clk,x1, x2, y);
-		fadd_old u_old (x1,x2,old_y);
+    fdiv u_new (clk,x1, x2, y);
+		fdiv_old u_old (x1,x2,old_y,clk,rstn);
 
 
     // assertion
@@ -28,12 +29,14 @@ module ftest
 
     initial begin
         #1;
+				rstn = 0;
         clk = 1;
         x1 = 0;
         x2 = 0;
         #1;
         clk = 0;
         #1;
+				rstn = 1;
         clk = 1;
         $display("random case");
         for (i=0; i<1000; i++) begin

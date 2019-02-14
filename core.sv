@@ -570,7 +570,7 @@ module core (
 				end else begin
 					scause <= {1'b1,31'b0} | (1<<10);
 				end
-			if(inst.inval | csr_inval_addr | csr_unprivileged) begin // Illegal instruction
+			end else if(inst.inval | csr_inval_addr | csr_unprivileged) begin // Illegal instruction
 				scause <= 1 << 2;
 				stval <= 0;
 			end else if (inst.ecall && cpu_mode == 2'b0) begin // Environment call from U-mode

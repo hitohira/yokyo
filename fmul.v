@@ -54,7 +54,7 @@ module fmul(
     assign my = (mya[47:47]) ? mya[46:24]: mya[45:23];
 
     reg [8:0] eya0; // 1
-		always @(posedge clK) begin
+		always @(posedge clk) begin
     	eya0 <= (x1[30:0] == 31'b0 | x2[30:0] == 31'b0) ? 9'b0: e1 + e2;
 		end
     

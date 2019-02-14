@@ -273,7 +273,7 @@ module mmu(
 					throw_exception <= 1;
 					exception_vec <= fault(is_instr,is_write);
 					state <= 12; //ret
-				end else if(!data_r) begin // read ok?
+				end else if(!is_instr && !is_write && !data_r) begin // read ok?
 					throw_exception <= 1;
 					exception_vec <= fault(is_instr,is_write);
 					state <= 12; //ret
@@ -471,7 +471,7 @@ module mmu(
 				4'h0 : c_axi_rdata <= mtime[31:0];
 				4'h4 : c_axi_rdata <= mtime[63:32];
 				4'h8 : c_axi_rdata <= mtimecmp[31:0];
-				4'hC : c_axi_rdata <= mtimecmp[64:32];
+				4'hC : c_axi_rdata <= mtimecmp[63:32];
 				default : begin
 					throw_exception <= 1;
 					exception_vec <= EXCEPTION_UNDEFINED;

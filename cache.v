@@ -138,7 +138,7 @@ module cache(
 				state <= 4; // tag check
 			end else begin
 				m_axi_awready <= 1;
-				stete <= 2;
+				state <= 2;
 			end
 		end else if (state == 2) begin // wait for mmu request 3
 			m_axi_awready <= 0;
@@ -202,7 +202,7 @@ module cache(
 			line_data[511:480] <= bram_dout;
 			line_data[479:0] <= line_data >> 32;
 			state <= 9;	
-		end else if (staete == 9) begin
+		end else if (state == 9) begin
 			line_data[511:480] <= bram_dout;
 			line_data[479:0] <= line_data >> 32;
 			state <= 10;
