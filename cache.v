@@ -113,6 +113,7 @@ module cache(
 	reg [511:0] line_data;
 
 	reg [31:0] req_addr;
+	reg [31:0] req_addr2;
 	reg [31:0] req_data;
 	reg [3:0] req_strb;
 	reg is_write;
@@ -121,9 +122,13 @@ module cache(
 	wire [13:0] b_tag;
 	wire [5:0] offset;
 
-	assign g_tag = req_addr[31:20];
-	assign b_tag = req_addr[19:6];
-	assign offset = {req_addr[5:2],2'b00};
+	assign g_tag = req_addr2[31:20];
+	assign b_tag = req_addr2[19:6];
+	assign offset = {req_addr2[5:2],2'b00};
+
+	always @(posedge clk) begin
+		req_addr2 <= req_addr;
+	end
 
 	always @(posedge clk) begin
 		if (state == 0) begin // wait for mmu request 1
@@ -134,7 +139,6 @@ module cache(
 			if(m_axi_arvalid) begin
 				req_addr <= m_axi_araddr;
 				is_write <= 0;
-				table_addr <= m_axi_araddr[19:6];
 				state <= 4; // tag check
 			end else begin
 				m_axi_awready <= 1;
@@ -146,7 +150,6 @@ module cache(
 				m_axi_wready <= 1;
 				req_addr <= m_axi_awaddr;
 				is_write <= 1;
-				table_addr <= m_axi_awaddr[19:6];
 				state <= 3;
 			end else begin
 				m_axi_arready <= 1;
@@ -159,7 +162,10 @@ module cache(
 				req_strb <= m_axi_wstrb;
 				state <= 4; // tag check
 			end
-		end else if (state == 4) begin // tag is exist?
+		end else if (state == 4) begin
+			table_addr <= req_addr[19:6];
+			state <= 40;
+		end else if (state == 40) begin // tag is exist?
 			if(table_tag == g_tag && table_valid) begin // cache block exist
 				bram_addr <= {b_tag,offset};
 				if(is_write) begin
