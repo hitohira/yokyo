@@ -745,16 +745,16 @@ module core (
 							mem_exception_vec <= m_exception_vec;
 						end else if(inst.lb) begin
 							case(addr[1:0])
-								2'b00: load_result <= {{24{m_axi_rdata[31]}},m_axi_rdata[31:24]};
-								2'b01: load_result <= {{24{m_axi_rdata[23]}},m_axi_rdata[23:16]};
-								2'b10: load_result <= {{24{m_axi_rdata[15]}},m_axi_rdata[15:8]};
-								2'b11: load_result <= {{24{m_axi_rdata[7]}},m_axi_rdata[7:0]};
+								2'b11: load_result <= {{24{m_axi_rdata[31]}},m_axi_rdata[31:24]};
+								2'b10: load_result <= {{24{m_axi_rdata[23]}},m_axi_rdata[23:16]};
+								2'b01: load_result <= {{24{m_axi_rdata[15]}},m_axi_rdata[15:8]};
+								2'b00: load_result <= {{24{m_axi_rdata[7]}},m_axi_rdata[7:0]};
 								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end else if (inst.lh) begin
 							case(addr[1:0])
-								2'b00 : load_result <= {{16{m_axi_rdata[31]}},m_axi_rdata[31:16]};
-								2'b10 : load_result <= {{16{m_axi_rdata[15]}},m_axi_rdata[15:0]};
+								2'b10 : load_result <= {{16{m_axi_rdata[31]}},m_axi_rdata[31:16]};
+								2'b00 : load_result <= {{16{m_axi_rdata[15]}},m_axi_rdata[15:0]};
 								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end else if (inst.lw | inst.flw) begin
@@ -765,16 +765,16 @@ module core (
 							end
 						end else if (inst.lbu) begin
 							case(addr[1:0])
-								2'b00: load_result <= {24'b0,m_axi_rdata[31:24]};
-								2'b01: load_result <= {24'b0,m_axi_rdata[23:16]};
-								2'b10: load_result <= {24'b0,m_axi_rdata[15:8]};
-								2'b11: load_result <= {24'b0,m_axi_rdata[7:0]};
+								2'b11: load_result <= {24'b0,m_axi_rdata[31:24]};
+								2'b10: load_result <= {24'b0,m_axi_rdata[23:16]};
+								2'b01: load_result <= {24'b0,m_axi_rdata[15:8]};
+								2'b00: load_result <= {24'b0,m_axi_rdata[7:0]};
 								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end else if (inst.lhu) begin
 							case(addr[1:0])
-								2'b00 : load_result <= {16'b0,m_axi_rdata[31:16]};
-								2'b10 : load_result <= {16'b0,m_axi_rdata[15:0]};
+								2'b10 : load_result <= {16'b0,m_axi_rdata[31:16]};
+								2'b00 : load_result <= {16'b0,m_axi_rdata[15:0]};
 								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end
@@ -795,19 +795,19 @@ module core (
 					m_axi_wvalid <= 1;
 					if(inst.sb) begin 
 						case(addr[1:0])
-							2'b00 : begin 
+							2'b11 : begin 
 								m_axi_wstrb <= 4'b1000;
 								m_axi_wdata <= {src2[7:0],24'b0};
 								end
-							2'b01 : begin
+							2'b10 : begin
 								m_axi_wstrb <= 4'b0100;
 								m_axi_wdata <= {8'b0,src2[7:0],16'b0};
 								end
-							2'b10 : begin
+							2'b01 : begin
 								m_axi_wstrb <= 4'b0010;
 								m_axi_wdata <= {16'b0,src2[7:0],8'b0};
 								end
-							2'b11 : begin
+							2'b00 : begin
 								m_axi_wstrb <= 4'b0001;
 								m_axi_wdata <= {24'b0,src2[7:0]};
 								end
@@ -818,11 +818,11 @@ module core (
 						endcase	
 					end else if (inst.sh) begin
 						case(addr[1:0])
-							2'b00 : begin
+							2'b10 : begin
 								m_axi_wstrb <= 4'b1100;
 								m_axi_wdata <= {src2[15:0],16'b0};
 								end
-							2'b10 : begin
+							2'b00 : begin
 								m_axi_wstrb <= 4'b0011;
 								m_axi_wdata <= {16'b0,src2[15:0]};
 								end

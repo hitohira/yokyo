@@ -444,7 +444,7 @@ module mmu(
 				state <= 13;  // read end
 			end
 		end else if (state == 24) begin // uart write
-			io_out_data <= data[31:24];
+			io_out_data <= data[7:0];
 			io_out_vld <= 1;
 			state <= 25;
 		end else if (state == 25) begin
@@ -457,7 +457,7 @@ module mmu(
 		end else if (state == 28) begin
 			if(io_in_vld) begin
 				io_in_rdy <= 0;
-				c_axi_rdata <= {io_in_data[7:0],24'b0};
+				c_axi_rdata <= {24'b0,io_in_data[7:0]};
 				c_axi_rresp <= 0;
 				c_axi_rvalid <= 1;
 				state <= 13; //read end

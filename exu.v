@@ -94,20 +94,20 @@ module exu(
 	wire feq_result,flt_result,fle_result;
 	wire [31:0] fsgnj_result,fsgnjn_result;
 
-//	mul mul_u (src1,src2,mul_result,clk);
-//	mulh mulh_u (src1,src2,mulh_result,clk);
-//	mulhsu mulhsu_u (src1,src2,mulhsu_result,clk);
-//	mulhu mulhu_u (src1,src2,mulhu_result,clk);
+	mul mul_u (src1,src2,mul_result,clk);
+	mulh mulh_u (src1,src2,mulh_result,clk);
+	mulhsu mulhsu_u (src1,src2,mulhsu_result,clk);
+	mulhu mulhu_u (src1,src2,mulhu_result,clk);
 
-//	fadd fadd_u (clk,src1,src2,fadd_result);
-//	fmul fmul_u (clk,src1,src2,fmul_result);
-//	fdiv fdiv_u (clk,src1,src2,fdiv_result);
+	fadd fadd_u (clk,src1,src2,fadd_result);
+	fmul fmul_u (clk,src1,src2,fmul_result);
+	fdiv fdiv_u (clk,src1,src2,fdiv_result);
 
-//	feq feq_u (src1,src2,feq_result);
-//	flt flt_u (src1,src2,flt_result);
-//	fle fle_u (src1,src2,fle_result);
-//	fsgnj fsgnj_u (src1,src2,fsgnj_result);
-//	fsgnjn fsgnjn_u (src1,src2,fsgnjn_result);
+	feq feq_u (src1,src2,feq_result);
+	flt flt_u (src1,src2,flt_result);
+	fle fle_u (src1,src2,fle_result);
+	fsgnj fsgnj_u (src1,src2,fsgnj_result);
+	fsgnjn fsgnjn_u (src1,src2,fsgnjn_result);
 
 	always @(posedge clk) begin
 		if(~rstn) begin
