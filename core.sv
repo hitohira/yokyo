@@ -416,6 +416,9 @@ module core (
   localparam EXCEPTION_INSTR_PG_FAULT = 3'b001;
   localparam EXCEPTION_LOAD_PG_FAULT = 3'b010;
   localparam EXCEPTION_STORE_PG_FAULT = 3'b011;
+	localparam EXCEPTION_INSTR_ACCESS_FAULT = 3'b100;
+	localparam EXCEPTION_LOAD_ACCESS_FAULT = 3'b101;
+	localparam EXCEPTION_STORE_ACCESS_FAULT = 3'b110;
   localparam EXCEPTION_UNDEFINED = 3'b111;
 			
 	(* mark_debug = "true" *) s_inst state = s_wait;
@@ -578,9 +581,12 @@ module core (
 				stval <= 0;
 			end else if (mem_exception_vec != 0) begin
 				case(mem_exception_vec) 
-					EXCEPTION_INSTR_PG_FAULT : scause <= 1 << 1;
-					EXCEPTION_LOAD_PG_FAULT  : scause <= 1 << 5;
+					EXCEPTION_INSTR_PG_FAULT : scause <= 1 << 12;
+					EXCEPTION_LOAD_PG_FAULT  : scause <= 1 << 13;
 					EXCEPTION_STORE_PG_FAULT : scause <= 1 << 15;
+					EXCEPTION_INSTR_ACCESS_FAULT : scause <= 1 << 1;
+					EXCEPTION_LOAD_ACCESS_FAULT : scause <= 1 << 5;
+					EXCEPTION_STORE_ACCESS_FAULT : scause <= 1 << 7;
 					default : scause <= 1 << 16; // ?????????????????????
 				endcase
 				stval <= addr;
@@ -743,19 +749,19 @@ module core (
 								2'b01: load_result <= {{24{m_axi_rdata[23]}},m_axi_rdata[23:16]};
 								2'b10: load_result <= {{24{m_axi_rdata[15]}},m_axi_rdata[15:8]};
 								2'b11: load_result <= {{24{m_axi_rdata[7]}},m_axi_rdata[7:0]};
-								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
+								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end else if (inst.lh) begin
 							case(addr[1:0])
 								2'b00 : load_result <= {{16{m_axi_rdata[31]}},m_axi_rdata[31:16]};
 								2'b10 : load_result <= {{16{m_axi_rdata[15]}},m_axi_rdata[15:0]};
-								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
+								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end else if (inst.lw | inst.flw) begin
 							if(addr[1:0] == 2'b0) begin
 								load_result <= m_axi_rdata;
 							end else begin
-								 mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
+								 mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							end
 						end else if (inst.lbu) begin
 							case(addr[1:0])
@@ -763,13 +769,13 @@ module core (
 								2'b01: load_result <= {24'b0,m_axi_rdata[23:16]};
 								2'b10: load_result <= {24'b0,m_axi_rdata[15:8]};
 								2'b11: load_result <= {24'b0,m_axi_rdata[7:0]};
-								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
+								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end else if (inst.lhu) begin
 							case(addr[1:0])
 								2'b00 : load_result <= {16'b0,m_axi_rdata[31:16]};
 								2'b10 : load_result <= {16'b0,m_axi_rdata[15:0]};
-								default: mem_exception_vec <= EXCEPTION_LOAD_PG_FAULT;
+								default: mem_exception_vec <= EXCEPTION_LOAD_ACCESS_FAULT;
 							endcase
 						end
 						sub_state <= 3;
@@ -807,7 +813,7 @@ module core (
 								end
 							default : begin
 								m_axi_wstrb <= 0;
-								mem_exception_vec <= EXCEPTION_STORE_PG_FAULT;
+								mem_exception_vec <= EXCEPTION_STORE_ACCESS_FAULT;
 								end
 						endcase	
 					end else if (inst.sh) begin
@@ -822,7 +828,7 @@ module core (
 								end
 							default : begin
 								m_axi_wstrb <= 0;
-								mem_exception_vec <= EXCEPTION_STORE_PG_FAULT;
+								mem_exception_vec <= EXCEPTION_STORE_ACCESS_FAULT;
 								end
 						endcase
 					end else if (inst.sw | inst.fsw) begin
@@ -831,7 +837,7 @@ module core (
 							m_axi_wdata <= src2;
 						end else begin
 							m_axi_wstrb <= 0; 
-							mem_exception_vec <= EXCEPTION_STORE_PG_FAULT;
+							mem_exception_vec <= EXCEPTION_STORE_ACCESS_FAULT;
 						end
 					end
 					sub_state <= 1;
