@@ -470,11 +470,13 @@ module core (
 	                inst.div | inst.divu | inst.rem | inst.remu |
 	                inst.fadd | inst.fsub | inst.fmul | inst.fdiv |
 	                inst.feq | inst.flt | inst.fle | inst.fsgnj | inst.fsgnjn;
+	wire is_fopes = inst.fadd | inst.fsub | inst.fmul | inst.fdiv |
+	                inst.feq | inst.flt | inst.fle | inst.fsgnj | inst.fsgnjn;
 	assign ex_sig = 
 		{3'b0,inst.fsgnjn,inst.fsgnj,inst.fle,inst.flt,inst.feq,inst.fdiv,inst.fmul,inst.fsub,inst.fadd,
 			inst.remu,inst.rem,inst.divu,inst.div,inst.mulhu,inst.mulhsu,inst.mulh,inst.mul };
-	assign ex_src1 = src1;
-	assign ex_src2 = src2;
+	assign ex_src1 = is_fopes ? fsrc1 : src1;
+	assign ex_src2 = is_fopes ? fsrc2 : src2;
 	assign ex_out_valid = is_exu && state == s_inst_exec;
 
 	// csr
@@ -630,6 +632,7 @@ module core (
 			 inst.sltu | inst.xor_ | inst.srl | inst.sra  | inst.or_  | inst.and_ |
 			 inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu |
 			 inst.jal | inst.jalr | 
+			 inst.feq | inst.fle | inst.flt |
 			 inst.csrrw | inst.csrrs | inst.csrrc |
 			 inst.mul | inst.mulh | inst.mulhsu | inst.mulhu |
 			 inst.div | inst.divu | inst.rem | inst.remu);

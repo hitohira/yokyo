@@ -13,8 +13,8 @@ module ftest
     int i,j;
 
 
-    fdiv u_new (clk,x1, x2, y);
-		fdiv_old u_old (x1,x2,old_y,clk,rstn);
+    fadd u_new (clk,x1, x2, y);
+		fadd_old u_old (x1,x2,old_y);
 
 
     // assertion
@@ -39,7 +39,7 @@ module ftest
 				rstn = 1;
         clk = 1;
         $display("random case");
-        for (i=0; i<1000; i++) begin
+        for (i=0; i<10000000; i++) begin
             x1 = $urandom();
             x2 = $urandom();
 						counter <= 0;
