@@ -117,11 +117,16 @@ module decoder
     wire j_type;
     assign j_type = ((inst_code[6:5] == 2'b11) && (inst_code[4:2] == 3'b011));
 
-    assign rs1 = (r_type | i_type | s_type | b_type) ? inst_code[19:15] : 5'd0;
+    assign rs1 = 
+				(r_type | i_type | s_type | b_type) ? inst_code[19:15] :
+				opcode == 7'b1110011 ? inst_code[19:15] : 5'd0;
+
     assign rs2 = (r_type | s_type | b_type) ? inst_code[24:20] : 5'd0;
 
     always @(posedge clk) begin
-        rd <= (r_type | i_type | u_type | j_type) ? inst_code[11:7] : 5'd0;
+        rd <= 
+						(r_type | i_type | u_type | j_type) ? inst_code[11:7] :
+						opcode == 7'b1110011 ? inst_code[11:7] : 5'd0;
 				csr <= inst_code[31:20];
 
         imm <= i_type ? {{21{inst_code[31]}}, inst_code[30:20]} :
@@ -612,6 +617,7 @@ module core (
 			csr_result <= 0;
 		end else if (state == s_inst_exec && (inst.csrrw | inst.csrrs | inst.csrrc)) begin
 				case(csr_addr) 
+					12'h100 : csr_result <= sstatus;
 					12'h104 : csr_result <= sie;
 					12'h105 : csr_result <= stvec;
 					12'h140 : csr_result <= sscratch;
