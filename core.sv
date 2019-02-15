@@ -435,7 +435,7 @@ module core (
 	reg [2:0] mem_exception_vec;
 	reg [2:0] exu_exception_vec;
 
-  (* mark_debug = "true" *) instif inst();
+  instif inst();
   wire [4:0] rd; // DEC
   wire rd_enable;
   wire frd_enable;
@@ -479,16 +479,22 @@ module core (
 	assign ex_src2 = is_fopes ? fsrc2 : src2;
 	assign ex_out_valid = is_exu && state == s_inst_exec;
 
+	(* mark_debug = "true" *) wire is_inval;
+	assign is_inval = inst.inval;
+	(* mark_debug = "true" *) wire is_ecall;
+	assign is_ecall = inst.ecall;
+
+
 	// csr
-	reg [31:0] sstatus; // 0x100 Trapのネスト関係 SIE[1]が今のenable、SPIE[5]は前のenable、SPP[8]が前のモード(0=user,1=super) see mstatus
-	reg [31:0] sie; // 0x104 sipに対応するenable bit、これが立っていると割込みがenable
-	reg [31:0] stvec; // 0x105 BASE[31:2]=trap時のジャンプのベースアドレス,MODE[1:0]=ジャンプアドレスの決め方(HWは書き換えない?)
-	reg [31:0] sscratch; // 0x140 コンテキストの保存場所を指すように使われる(HWは書き換えない?)
-	reg [31:0] sepc; // 0x141, trap時にtrapが起こった時のpcに書き換える
+	(* mark_debug = "true" *) reg [31:0] sstatus; // 0x100 Trapのネスト関係 SIE[1]が今のenable、SPIE[5]は前のenable、SPP[8]が前のモード(0=user,1=super) see mstatus
+	(* mark_debug = "true" *) reg [31:0] sie; // 0x104 sipに対応するenable bit、これが立っていると割込みがenable
+	(* mark_debug = "true" *) reg [31:0] stvec; // 0x105 BASE[31:2]=trap時のジャンプのベースアドレス,MODE[1:0]=ジャンプアドレスの決め方(HWは書き換えない?)
+	(* mark_debug = "true" *) reg [31:0] sscratch; // 0x140 コンテキストの保存場所を指すように使われる(HWは書き換えない?)
+	(* mark_debug = "true" *) reg [31:0] sepc; // 0x141, trap時にtrapが起こった時のpcに書き換える
 	reg [31:0] scause; // 0x142, trap時にその原因コードに書き換える see Table 4.2
 	reg [31:0] stval; // 0x143 Trap時に例外の情報を書き込む
-	reg [31:0] sip; // 0x144 SSIP[1]=これが1だとソフトウェア割込み発生,STIP[5]=これが1だとタイマー割込み,SEIP[9]=これが1だと外部割込み(HWも書き換えると思う)
-	reg [31:0] satp; // 0x180 アドレス変換の情報(HWは書き換えない)
+	(* mark_debug = "true" *) reg [31:0] sip; // 0x144 SSIP[1]=これが1だとソフトウェア割込み発生,STIP[5]=これが1だとタイマー割込み,SEIP[9]=これが1だと外部割込み(HWも書き換えると思う)
+	(* mark_debug = "true" *) reg [31:0] satp; // 0x180 アドレス変換の情報(HWは書き換えない)
 
 	reg csr_inval_addr;
 	reg csr_unprivileged;
@@ -837,7 +843,7 @@ module core (
 					end else if (inst.sw | inst.fsw) begin
 						if(addr[1:0] == 0) begin
 							m_axi_wstrb <= 4'b1111;
-							m_axi_wdata <= src2;
+							m_axi_wdata <= inst.fsw ? fsrc2 : src2;
 						end else begin
 							m_axi_wstrb <= 0; 
 							mem_exception_vec <= EXCEPTION_STORE_ACCESS_FAULT;

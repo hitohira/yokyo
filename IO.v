@@ -4,12 +4,12 @@ module IOcontroller (
 
 	// cpu
 	output wire [7:0] io_in_data,
-	(* mark_debug = "true" *) input wire io_in_rdy,
-	(* mark_debug = "true" *) output reg io_in_vld,
+	input wire io_in_rdy,
+	output reg io_in_vld,
 
-	(* mark_debug = "true" *) input wire [7:0] io_out_data,
-	(* mark_debug = "true" *) output reg io_out_rdy,
-	(* mark_debug = "true" *) input wire io_out_vld,
+	input wire [7:0] io_out_data,
+	output reg io_out_rdy,
+	input wire io_out_vld,
 
 	output reg [4:0] io_err, // { resp[1],parity,frame,overrun,lost }
 
@@ -43,19 +43,19 @@ module IOcontroller (
 	localparam buf_size = 32;
 	localparam buf_bit  = 5;
 
-	(* mark_debug = "true" *)	reg [2:0] state;
-	(* mark_debug = "true" *) reg [2:0] sub_state;
+	reg [2:0] state;
+	reg [2:0] sub_state;
 	reg [2:0] in_state;
 	reg [2:0] out_state;
 	reg [7:0] stat_reg;
 
 	// when push to buf, hd++;; when pop from buf, tl++  tl <= x < hd is valid data
 	reg [7:0] rbuf_data [buf_size-1:0];
-	(* mark_debug = "true" *) reg [buf_bit-1:0] rbuf_hd;
-	(* mark_debug = "true" *) reg [buf_bit-1:0] rbuf_tl;
+	reg [buf_bit-1:0] rbuf_hd;
+	reg [buf_bit-1:0] rbuf_tl;
 	reg [7:0] wbuf_data [buf_size-1:0];
-	(* mark_debug = "true" *) reg [buf_bit-1:0] wbuf_hd;
-	(* mark_debug = "true" *) reg [buf_bit-1:0] wbuf_tl;
+	reg [buf_bit-1:0] wbuf_hd;
+	reg [buf_bit-1:0] wbuf_tl;
 	wire r_uart_rdy;
 	wire w_uart_rdy;
 	wire r_in_rdy;
