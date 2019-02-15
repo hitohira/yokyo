@@ -455,7 +455,6 @@ module core (
 	wire [31:0] result;
 	wire [31:0] alu_result; // ALU
   reg [31:0] load_result;
-  wire [31:0] fpu_result; // FPU
 	reg [31:0] csr_result;
 	reg [31:0] exu_result;
    
@@ -466,7 +465,6 @@ module core (
   fregister FREGISTER(.clk(clk), .rstn(rstn), .rd_idx(rd), .rd_enable(frd_enable), .rs1_idx(rs1), .rs2_idx(rs2), .data(result), .rs1(fsrc1), .rs2(fsrc2));
    
   alu ALU(.clk(clk), .rstn(rstn), .src1(alu_src1), .src2(alu_src2), .result(alu_result), .inst(inst));
-	//fpu FPU(.clk(clk), .rstn(rstn), .src1(fsrc1), .src2(fsrc2), .result(fpu_result), .inst(inst));
 
 
 	//exu
@@ -517,7 +515,7 @@ module core (
 			satp <= 0;
 			csr_inval_addr <= 0;
 			csr_unprivileged <= 0;
-		end else if (state == s_inst_decode) begin
+		end else if (state == s_inst_fetch) begin
 			csr_inval_addr <= 0;
 			csr_unprivileged <= 0;
 		end else if (state == s_inst_exec) begin
