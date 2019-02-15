@@ -625,7 +625,7 @@ module core (
 
 	assign rd_enable = state == s_inst_write && 
 			(inst.lui | inst.auipc |
-			 inst.addi | inst.slti | inst.xori | inst.ori | inst.andi | inst.slli |
+			 inst.addi | inst.slti | inst.sltiu | inst.xori | inst.ori | inst.andi | inst.slli |
 			 inst.srli | inst.srai | inst.add | inst.sub | inst.sll | inst.slt |
 			 inst.sltu | inst.xor_ | inst.srl | inst.sra  | inst.or_  | inst.and_ |
 			 inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu |
@@ -638,7 +638,7 @@ module core (
 	assign result = 
 			inst.lui ? imm :
 			inst.auipc ? pc + imm :
-			(inst.addi | inst.slti | inst.xori | inst.ori | inst.andi | inst.slli | 
+			(inst.addi | inst.slti | inst.sltiu | inst.xori | inst.ori | inst.andi | inst.slli | 
 			 inst.srli | inst.srai | inst.add | inst.sub | inst.sll | inst.slt | inst.sltu |
 			 inst.xor_ | inst.srl | inst.sra  | inst.or_  | inst.and_) ? alu_result :
 			(inst.lb | inst.lh | inst.lw | inst.lbu | inst.lhu | inst.flw) ? load_result :
