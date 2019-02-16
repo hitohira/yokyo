@@ -1,3 +1,5 @@
+`default_nettype none
+
 module cache2(
 	input wire clk,
 
@@ -121,7 +123,6 @@ module cache2(
 	assign table_valid1 = table_dout[13];
 	assign table_tag1 = table_dout[12:0];
 
-	// この上まで書き直した
 
 	reg [5:0] state;
 	reg [3:0] counter;
@@ -133,12 +134,16 @@ module cache2(
 	reg [3:0] req_strb;
 	reg is_write;
 	
-	wire [11:0] g_tag;
-	wire [13:0] b_tag;
+	wire [12:0] g_tag_br;
+	wire [12:0] b_tag_br;
+	wire [11:0] g_tag_sd;
+	wire [13:0] b_tag_sd;
 	wire [5:0] offset;
-
-	assign g_tag = req_addr2[31:20];
-	assign b_tag = req_addr2[19:6];
+	
+	assign g_tag_br = req_addr2[31:19];
+	assign b_tag_br = req_addr2[18:6];
+	assign g_tag_sd = req_addr2[31:20];
+	assign b_tag_sd = req_addr2[19:6];
 	assign offset = {req_addr2[5:2],2'b00};
 
 	always @(posedge clk) begin
@@ -178,13 +183,15 @@ module cache2(
 				state <= 4; // tag check
 			end
 		end else if (state == 4) begin
-			table_addr <= req_addr[19:6];
+			table_addr <= req_addr[18:6];
 			state <= 40;
 		end else if (state == 40) begin // tag is exist?
-			if(table_tag == g_tag && table_valid) begin // cache block exist
-				bram_addr <= {b_tag,offset};
+			if((table_tag0 == g_tag_br || table_tag1 == g_tag_br) && table_valid) begin // cache block exist
+				bram_addr <= table_tag0 == g_tag_br ? {1'b0,b_tag_br,offset} : {1'b1,b_tag_br.offset};
 				if(is_write) begin
-					table_din <= {2'b11,g_tag};
+					table_din <= 
+							(table_tag0 == g_tag_br) ? {1'b1,2'b11,table_tag0,table_dirty1,table_valid1,table_tag1} :
+							                         ? {1'b0,table_dirty0,table_valid0,table_tag0,2'b11,table_tag1} ;
 					table_we <= 1;
 					bram_we <= req_strb;
 					bram_din <= req_data;
@@ -195,24 +202,25 @@ module cache2(
 					bram_we <= 0;
 					state <= 26;
 				end
-			end else if (!table_valid || !table_dirty) begin // cache miss -> read
-				s_axi_araddr <= {g_tag,b_tag,6'b00};
+				// 最後が1なら0を更新
+			end else if ((table_lru & (~table_valid0 | ~table_dirty0)) || (~table_lru & (~table_valid1 | ~table_dirty1))) begin // cache miss -> read
+				s_axi_araddr <= {g_tag_sd,b_tag_sd,6'b0};
 				s_axi_arvalid <= 1;
 				state <= 17;
 			end else begin // cache miss -> write back -> read
-				bram_addr <= {b_tag,6'b000000};
+				bram_addr <= {~table_lru,b_tag_br,6'b00};
 				state <= 5;
 			end
 		end else if (state == 5) begin
-			bram_addr <= {b_tag,6'b000100};
+			bram_addr <= {~table_lru,b_tag_br,6'b000100};
 			state <= 6;
 		end else if (state == 6) begin
-			bram_addr <= {b_tag,6'b001000};
+			bram_addr <= {~table_lru,b_tag_br,6'b001000};
 			counter <= 3;
 			line_data <= 0;
 			state <= 7;
 		end else if (state == 7) begin
-			bram_addr <= {b_tag,counter,2'b00};
+			bram_addr <= {~table_lru,b_tag_br,counter,2'b00};
 			counter <= counter + 1'b1;
 			line_data[511:480] <= bram_dout;
 			line_data[479:0] <= line_data >> 32;
@@ -232,7 +240,7 @@ module cache2(
 			line_data[479:0] <= line_data >> 32;
 			state <= 11;	
 		end else if (state == 11) begin
-			s_axi_awaddr <= {table_tag,b_tag,6'b0};
+			s_axi_awaddr <= table_lru ? {table_tag0,b_tag_br,6'b0} : {table_tag1,b_tag_br,6'b0};
 			s_axi_awvalid <= 1;
 			s_axi_wdata <= line_data;
 			s_axi_wvalid <= 1;
@@ -254,7 +262,7 @@ module cache2(
 				if(s_axi_bresp[1]) begin
 					err <= 1;
 				end else begin
-					s_axi_araddr <= {g_tag,b_tag,6'b00};
+					s_axi_araddr <= {g_tag_sd,b_tag_sd,6'b0};
 					s_axi_arvalid <= 1;
 					state <= 17;
 				end
@@ -277,20 +285,23 @@ module cache2(
 				end
 			end
 		end else if (state == 19) begin // write cache line(16clk)
-			bram_addr <= {b_tag,counter,2'b00};
+			bram_addr <= {~table_lru,b_tag_br,counter,2'b00};
 			bram_din <= line_data[31:0];
 			bram_we <= 4'b1111;
 			line_data <= line_data >> 32;
 			counter <= counter + 1'b1;
 			if(counter == 4'b1111) begin
-				table_din <= {2'b01,g_tag}; // update table
+				table_din <= table_lru ? {1'b0,2'b01,g_tag_br,table_dirty1,table_valid1,table_tag1} :
+				                         {1'b1,table_dirty0,table_valid0,table_tag0,2'b01,g_tag_br} ; // update table
 				table_we <= 1;
 				state <= 20;
 			end
 		end else if (state == 20) begin // start mem ope
-			bram_addr <= {b_tag,offset};
+			//ここではまだstate19のtable更新はされていない
+			bram_addr <= {~table_lru,b_tag_br,offset};
 			if(is_write) begin
-				table_din <= {2'b11,g_tag};
+				table_din <= table_lru ? {1'b0,2'b11,g_tag_br,table_dirty1,table_valid1,table_tag1} :
+				                         {1'b1,table_dirty0,table_valid0,table_tag0,2'b11,g_tag_br} ; // update table
 				table_we <= 1;
 				bram_we <= req_strb;
 				bram_din <= req_data;
@@ -379,3 +390,5 @@ module cache2(
 
 	end
 endmodule
+
+`default_nettype wire
