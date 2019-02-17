@@ -491,6 +491,8 @@ module core (
 	assign is_ecall = inst.ecall;
 
 
+	reg is_enter_store; //  for 0x10004 debug
+
 	// csr
 	(* mark_debug = "true" *) reg [31:0] sstatus; // 0x100 Trapのネスト関係 SIE[1]が今のenable、SPIE[5]は前のenable、SPP[8]が前のモード(0=user,1=super) see mstatus
 	(* mark_debug = "true" *) reg [31:0] sie; // 0x104 sipに対応するenable bit、これが立っていると割込みがenable
@@ -604,6 +606,9 @@ module core (
 					default : scause <= 1 << 16; // ?????????????????????
 				endcase
 				stval <= addr;
+			end else if (is_enter_store) begin // debug for 0x10004
+				scause <= 1 << 17;
+				stval <= instr;
 			end else begin
 				scause <= 1 << 16;
 				stval <= 0;
@@ -686,6 +691,7 @@ module core (
 		end
 	end
 
+
 	always @(posedge clk) begin
 		if (~rstn) begin 
 			sub_state <= 0;
@@ -707,6 +713,8 @@ module core (
 			exu_result <= 0;
 			exu_exception_vec <= 0;
 			mem_exception_vec <= 0;
+
+			is_enter_store <= 0; // for 0x10004
 		end else if (state == s_wait) begin
 			sub_state <= 0;
 			state <= s_inst_fetch;
@@ -748,7 +756,11 @@ module core (
 				exu_exception_vec <= 0;
 				if(inst.inval | inst.ecall) begin
 					state <= s_inst_inval;
+				end else if ((inst.sb | inst.sh | inst.sw | inst.fsw) && ~is_enter_store) begin // debug 0x10004
+					state <= s_inst_inval; // debug for 0x10004
+					is_enter_store <= 1; // debug for 0x10004
 				end else begin
+					is_enter_store <= 0;
 					state <= s_inst_mem;
 				end
 		end else if (state == s_inst_mem) begin
