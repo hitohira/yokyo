@@ -106,6 +106,7 @@ module mmu(
 	wire [11:0] offset;
 	wire [11:0] data_ppn_1;
 	wire [9:0] data_ppn_0;
+	wire [1:0] data_rsw;
 	wire data_d,data_a,data_g,data_u,data_x,data_w,data_r,data_v;
 
 	assign satp_mode = satp[31];
@@ -115,6 +116,8 @@ module mmu(
 	assign offset = v_addr[11:0];
 	assign data_ppn_1 = data[31:20];
 	assign data_ppn_0 = data[19:10];
+	assign data_rsw = data[9:8];
+
 	assign {data_d,data_a,data_g,data_u,data_x,data_w,data_r,data_v} = data[7:0];
 
 	always @(posedge clk) begin
@@ -284,10 +287,10 @@ module mmu(
 					state <= 12; //ret
 				end else if(data_a == 0 || (is_write && data_d == 0)) begin //7
 					if(is_write) begin
-						m_axi_wdata <= ch_endian({data_ppn_1,data_ppn_0,4'b0011,
+						m_axi_wdata <= ch_endian({data_ppn_1,data_ppn_0,data_rsw,2'b11,
 						         data_g,data_u,data_x,data_w,data_r,data_v});
 					end else begin
-						m_axi_wdata <= ch_endian({data_ppn_1,data_ppn_0,2'b00,data_d,1'b1,
+						m_axi_wdata <= ch_endian({data_ppn_1,data_ppn_0,data_rsw,data_d,1'b1,
 						         data_g,data_u,data_x,data_w,data_r,data_v});
 					end
 					m_axi_wvalid <= 1;
