@@ -129,7 +129,10 @@ module decoder
 						opcode == 7'b1110011 ? inst_code[11:7] : 5'd0;
 				csr <= inst_code[31:20];
 
-        imm <= i_type ? {{21{inst_code[31]}}, inst_code[30:20]} :
+        imm <= 
+						 i_type && (opcode == 7'b0010011) && (funct7 == 7'b0) && ((funct3 == 3'b001) || (funct3 == 3'b101)) ? {27'b0,inst_code[24:20]} :
+						 i_type && (opcode == 7'b0010011) && (funct3 == 3'b101) && (funct7 == 7'b0100000) ? {27'b0,inst_code[24:20]} :
+						 i_type ? {{21{inst_code[31]}}, inst_code[30:20]} :
              s_type ? {{21{inst_code[31]}}, inst_code[30:25], inst_code[11:7]} :
              b_type ? {{20{inst_code[31]}}, inst_code[7], inst_code[30:25], inst_code[11:8], 1'b0} :
              u_type ? {inst_code[31:12], 12'd0} :
@@ -164,7 +167,7 @@ module decoder
         inst.ori   <= (opcode == 7'b0010011) && (funct3 == 3'b110);
         inst.andi  <= (opcode == 7'b0010011) && (funct3 == 3'b111);
 
-        inst.slli <= (opcode == 7'b0010011) && (funct3 == 3'b001);
+        inst.slli <= (opcode == 7'b0010011) && (funct3 == 3'b001) && (funct7 == 7'b0);
         inst.srli <= (opcode == 7'b0010011) && (funct3 == 3'b101) && (funct7 == 7'b0000000);
         inst.srai <= (opcode == 7'b0010011) && (funct3 == 3'b101) && (funct7 == 7'b0100000);
 
