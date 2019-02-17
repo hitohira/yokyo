@@ -85,7 +85,7 @@ module mmu(
 
 	function [2:0] fault(input instr,input write);
 		fault = instr ? EXCEPTION_INSTR_PG_FAULT :
-		        write ? EXCEPTION_STORE_PG_FAULT : EXCEPTION_STORE_PG_FAULT;
+		        write ? EXCEPTION_STORE_PG_FAULT : EXCEPTION_LOAD_PG_FAULT;
 	endfunction
 
 	(* mark_debug = "true" *) reg [6:0] state;
@@ -259,7 +259,8 @@ module mmu(
 				if (level == 1) begin
 					p_addr <= {data_ppn_1,vpn_0,offset};
 				end else if(level == 0) begin
-					p_addr[21:0] <= {data_ppn_0,offset};
+					//p_addr[21:0] <= {data_ppn_0,offset};
+					p_addr <= {data_ppn_1,data_ppn_0,offset};
 				end
 				if(cpu_mode == 2'b0 && !data_u) begin // user?
 					throw_exception <= 1;

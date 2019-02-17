@@ -674,6 +674,15 @@ module core (
 	wire occur_intr;	
 	assign occur_intr = sstatus[1] &&	((sie[9] & sip[9]) || (sie[5] & sip[5]) || (sie[1] & sip[1]));
 	
+	reg [31:0] dbg_counter;
+	always @(posedge clk) begin
+		if (~rstn) begin
+			dbg_counter <= 0;
+		end else if(state == s_inst_write) begin
+			dbg_counter <= dbg_counter + 1'b1;
+		end
+	end
+
 	always @(posedge clk) begin
 		if (~rstn) begin 
 			sub_state <= 0;
