@@ -191,7 +191,7 @@ module cache2(
 				if(is_write) begin
 					table_din <= 
 							(table_tag0 == g_tag_br) ? {1'b0,2'b11,table_tag0,table_dirty1,table_valid1,table_tag1} :
-							                         ? {1'b1,table_dirty0,table_valid0,table_tag0,2'b11,table_tag1} ;
+							                           {1'b1,table_dirty0,table_valid0,table_tag0,2'b11,table_tag1} ;
 					table_we <= 1;
 					bram_we <= req_strb;
 					bram_din <= req_data;
