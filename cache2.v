@@ -186,12 +186,12 @@ module cache2(
 			table_addr <= req_addr[18:6];
 			state <= 40;
 		end else if (state == 40) begin // tag is exist?
-			if((table_tag0 == g_tag_br || table_tag1 == g_tag_br) && table_valid) begin // cache block exist
-				bram_addr <= table_tag0 == g_tag_br ? {1'b0,b_tag_br,offset} : {1'b1,b_tag_br.offset};
+			if((table_tag0 == g_tag_br && table_valid0) || (table_tag1 == g_tag_br && table_valid1)) begin // cache block exist
+				bram_addr <= table_tag0 == g_tag_br ? {1'b0,b_tag_br,offset} : {1'b1,b_tag_br,offset};
 				if(is_write) begin
 					table_din <= 
-							(table_tag0 == g_tag_br) ? {1'b1,2'b11,table_tag0,table_dirty1,table_valid1,table_tag1} :
-							                         ? {1'b0,table_dirty0,table_valid0,table_tag0,2'b11,table_tag1} ;
+							(table_tag0 == g_tag_br) ? {1'b0,2'b11,table_tag0,table_dirty1,table_valid1,table_tag1} :
+							                         ? {1'b1,table_dirty0,table_valid0,table_tag0,2'b11,table_tag1} ;
 					table_we <= 1;
 					bram_we <= req_strb;
 					bram_din <= req_data;
