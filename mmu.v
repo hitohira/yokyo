@@ -363,7 +363,7 @@ module mmu(
 				strb <= c_axi_wstrb;
 				if(p_addr == 34'h80000004) begin // uart
 					state <= 24;
-				end else if (p_addr == 34'h80001000 || p_addr == 34'h800010004 || p_addr == 34'h800010008 || p_addr == 34'h80001000C) begin
+				end else if (p_addr == 34'h80001000 || p_addr == 34'h80001004 || p_addr == 34'h80001008 || p_addr == 34'h8000100C) begin
 					state <= 30;
 				end else if (p_addr[33:31] == 3'b0) begin
 					state <= 15;
@@ -415,7 +415,7 @@ module mmu(
 			if(p_addr == 34'h80000000) begin
 				io_in_rdy <= 1;
 				state <= 28;
-				end else if (p_addr == 34'h80001000 || p_addr == 34'h800010004 || p_addr == 34'h800010008 || p_addr == 34'h80001000C) begin
+				end else if (p_addr == 34'h80001000 || p_addr == 34'h80001004 || p_addr == 34'h80001008 || p_addr == 34'h8000100C) begin
 					state <= 32;
 			end else if (p_addr[33:31] == 3'b0) begin
 				m_axi_araddr <= p_addr[31:0];
