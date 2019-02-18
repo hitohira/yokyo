@@ -898,7 +898,7 @@ module core (
 							mem_exception_vec <= m_exception_vec;
 						end else if (mem_exception_vec != 0) begin
 							state <= s_inst_inval;
-						end begin
+						end else begin
 							state <= s_inst_write;
 						end
 					end
