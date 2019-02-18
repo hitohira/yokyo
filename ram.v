@@ -49,7 +49,7 @@ module distram2(
 	integer i;
 	initial begin
 		for(i=0;i<WORDS;i=i+1) begin
-			mem[i] = {2'b11,12'b0};
+			mem[i] = {1'b0,2'b11,13'b0,2'b11,13'b1};
 		end
 	end
 endmodule

@@ -203,7 +203,7 @@ module cache2(
 					state <= 26;
 				end
 				// 最後が1なら0を更新
-			end else if ((table_lru & (~table_valid0 | ~table_dirty0)) || (~table_lru & (~table_valid1 | ~table_dirty1))) begin // cache miss -> read
+			end else if ((table_lru && (!table_valid0 || !table_dirty0)) || (!table_lru && (!table_valid1 || !table_dirty1))) begin // cache miss -> read
 				s_axi_araddr <= {g_tag_sd,b_tag_sd,6'b0};
 				s_axi_arvalid <= 1;
 				state <= 17;
