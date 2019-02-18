@@ -756,7 +756,7 @@ module core (
 				exu_exception_vec <= 0;
 				if(inst.inval | inst.ecall) begin
 					state <= s_inst_inval;
-				end else if ((inst.sb | inst.sh | inst.sw | inst.fsw) && ~is_enter_store) begin // debug 0x10004
+				end else if ((inst.sb | inst.sh | inst.sw | inst.fsw) && (addr[31:4] == 28'h1000) && ~is_enter_store) begin // debug 0x10004
 					state <= s_inst_inval; // debug for 0x10004
 					is_enter_store <= 1; // debug for 0x10004
 				end else begin
