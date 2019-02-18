@@ -407,6 +407,7 @@ module core (
 	input wire m_throw_exception,
 	input wire [2:0] m_exception_vec,
 
+	input wire is_soft_intr,
 	input wire is_timer_intr,
 	input wire is_ext_intr,
 
@@ -569,7 +570,7 @@ module core (
 			end
 		end else if (state == s_inst_write) begin
 			// 0 SEIP 0 STIP 0
-			sip <= sip | {22'b0,is_ext_intr,3'b0,is_timer_intr,5'b0};
+			sip <= sip | {22'b0,is_ext_intr,3'b0,is_timer_intr,3'b0,is_soft_intr,1'b1};
 		end else if (state == s_inst_inval) begin // exception
 			sepc <= pc;
 			// 0 SPP 0 SPIE 0 SIE 0
